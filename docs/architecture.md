@@ -31,10 +31,11 @@ backend, seed, output paths, trace-stall filter, and optional Python adapter pat
 ## Execution player ownership
 
 The only trace reducer and renderer are qsbit-sim's `trace-model.js` and
-`trace-player.js`. Their accompanying stylesheet also comes from qsbit-sim.
+`trace-player.js`. Shared typography, colors, styles and theme handling also come
+from qsbit-sim's `web/` directory.
 Studio serves those exact bytes through `/player/` from its pinned simulator
-submodule. Studio's JavaScript handles uploads, task state, metrics, and iframe
-sizing; it does not decode instructions or reconstruct simulator state.
+submodule. Studio's JavaScript handles uploads, task state, metrics, theme
+synchronization and workspace tabs.
 
 The server converts JSONL records and the simulator summary into the existing
 schema-1 replay bundle. The HTML host marks the player as standalone and passes
@@ -42,7 +43,8 @@ that bundle URL. Each selected run gets an independent iframe document so player
 initialization, event listeners, and playback timers belong to one recording.
 
 Changing the player requires a change in qsbit-sim. Advance the gitlink and
-`PLAYER_REVISION` together and run the dependency and browser checks. A development
+`PLAYER_REVISION` and `toolchain.lock.json` together and run the dependency and
+browser checks. A development
 `--player-root` override uses that checkout's actual bytes; the declared revision
 still identifies the repository's baseline pin.
 

@@ -26,3 +26,16 @@ jobs:
         run: |
           python3 tests/check_dependencies.py
           node --check web/studio.js
+      - name: Check browser workspace
+        run: |
+          cargo build --locked --offline --bin qsbit-studio
+          python3 -m venv .venv
+          .venv/bin/python -m pip install uv==0.12.7
+          .venv/bin/uv sync --frozen --group browser
+          .venv/bin/python -m playwright install --with-deps chromium
+          .venv/bin/python tests/workspace.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: studio-browser
+          path: .local/browser/

@@ -70,7 +70,7 @@ The server currently targets Linux and uses Unix process groups for teardown.
 | `--listen` | `127.0.0.1:3000`; use port 0 for an OS-assigned port. |
 | `--compiler`, `--simulator` | Installed `qsbitc` and `qsbit-sim`; environment overrides are `QSBIT_COMPILER` and `QSBIT_SIMULATOR`. |
 | `--exporter` | Exporter beside the Studio binary; `QSBIT_BLOG_EXPORTER` overrides it. |
-| `--player-root` | `external/qsbit-sim/docs/_static`; supports another simulator checkout for development. |
+| `--player-root` | `external/qsbit-sim/web`; supports another simulator checkout for development. |
 | `--python` | Optional simulator interpreter; also accepts `QSBIT_PYTHON`. |
 | `--python-path` | Optional simulator Python adapter directory. |
 | `--work-dir` | `.local/runs`; Studio creates a fresh owned session directory. |

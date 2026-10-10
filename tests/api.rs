@@ -14,8 +14,7 @@ use tower::ServiceExt;
 async fn setup(max_jobs: u32) -> (tempfile::TempDir, Arc<Studio>, Router) {
     let directory = tempfile::tempdir().unwrap();
     let mut config = Config::parse_from(["test"]);
-    config.player_root =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("external/qsbit-sim/docs/_static");
+    config.player_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("external/qsbit-sim/web");
     config.work_dir = directory.path().to_owned();
     config.exporter = Some("/bin/false".into());
     config.max_jobs = max_jobs;
@@ -55,7 +54,7 @@ fn upload() -> Value {
 #[tokio::test]
 async fn player_assets_are_the_exact_simulator_sources() {
     let (_directory, state, app) = setup(1).await;
-    for filename in ["trace-player.js", "trace-model.js", "site.css"] {
+    for (filename, mime) in qsbit_studio::PLAYER_ASSETS {
         let response = app
             .clone()
             .oneshot(
@@ -67,6 +66,7 @@ async fn player_assets_are_the_exact_simulator_sources() {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["content-type"], *mime);
         let bytes = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(
             bytes.as_ref(),
@@ -176,8 +176,7 @@ async fn selected_venv_interpreter_keeps_its_symlink_path() {
     let interpreter = directory.path().join("python");
     std::os::unix::fs::symlink("/bin/sh", &interpreter).unwrap();
     let mut config = Config::parse_from(["test"]);
-    config.player_root =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("external/qsbit-sim/docs/_static");
+    config.player_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("external/qsbit-sim/web");
     config.work_dir = directory.path().join("runs");
     config.python = Some(interpreter.clone());
     let state = Studio::new(config).await.unwrap();
@@ -219,7 +218,7 @@ async fn model_faults_and_nonzero_program_status_keep_validated_replays() {
         let directory = tempfile::tempdir().unwrap();
         let mut config = Config::parse_from(["test"]);
         config.player_root =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("external/qsbit-sim/docs/_static");
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("external/qsbit-sim/web");
         config.work_dir = directory.path().join("runs");
         config.exporter = Some(mock_tool(
             directory.path(),
@@ -265,8 +264,7 @@ async fn model_faults_and_nonzero_program_status_keep_validated_replays() {
 async fn queued_and_running_jobs_can_be_cancelled_without_starting_more_work() {
     let directory = tempfile::tempdir().unwrap();
     let mut config = Config::parse_from(["test"]);
-    config.player_root =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("external/qsbit-sim/docs/_static");
+    config.player_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("external/qsbit-sim/web");
     config.work_dir = directory.path().join("runs");
     config.max_running = 1;
     config.exporter = Some(mock_tool(directory.path(), "export", "sleep 30"));

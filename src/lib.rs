@@ -9,7 +9,19 @@ use std::{net::SocketAddr, path::PathBuf};
 use clap::Parser;
 
 pub const BLOQ_REVISION: &str = "0a4962595f32f5e5c63ce9cce224082c87632684";
-pub const PLAYER_REVISION: &str = "c98577ef8ed887452bae0b9cc4b6aeee09608553";
+pub const PLAYER_REVISION: &str = "0aa456d650bdec19b0974d901e66e832d27c8be9";
+pub const PLAYER_ASSETS: &[(&str, &str)] = &[
+    ("trace-model.js", "text/javascript; charset=utf-8"),
+    ("trace-player.js", "text/javascript; charset=utf-8"),
+    ("qsbit-theme.js", "text/javascript; charset=utf-8"),
+    ("qsbit-fonts.css", "text/css; charset=utf-8"),
+    ("qsbit-tokens.css", "text/css; charset=utf-8"),
+    ("qsbit-base.css", "text/css; charset=utf-8"),
+    ("trace-player.css", "text/css; charset=utf-8"),
+    ("fonts/source-sans-3.woff2", "font/woff2"),
+    ("fonts/source-sans-3-italic.woff2", "font/woff2"),
+    ("fonts/source-code-pro.woff2", "font/woff2"),
+];
 pub const MAX_BLOG_BYTES: usize = 256 * 1024;
 pub const MAX_TRACE_BYTES: u64 = 12 * 1024 * 1024;
 pub const MAX_JOB_BYTES: u64 = 64 * 1024 * 1024;
@@ -29,7 +41,7 @@ pub struct Config {
     /// Defaults to qsbit-blog-export beside the Studio executable.
     #[arg(long, env = "QSBIT_BLOG_EXPORTER")]
     pub exporter: Option<PathBuf>,
-    #[arg(long, default_value = "external/qsbit-sim/docs/_static")]
+    #[arg(long, default_value = "external/qsbit-sim/web")]
     pub player_root: PathBuf,
     /// Run artifacts are session-scoped and removed on clean shutdown.
     #[arg(long, default_value = ".local/runs")]

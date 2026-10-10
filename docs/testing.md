@@ -38,6 +38,21 @@ the measurement records using the exported Stim reference's detector converter.
 It also checks invalid graphs and a graph whose distance exceeds controller
 capacity. It does not use a prerecorded trace as the uploaded graph's result.
 
+## Workspace checks
+
+```sh
+cargo build --locked --offline --bin qsbit-studio
+uv sync --frozen --group browser
+uv run --frozen --group browser playwright install chromium
+uv run --frozen --group browser python tests/workspace.py
+```
+
+The browser checks use controlled API responses for empty, running, completed and
+failed states. They check file-read and deletion races, reconnection, keyboard
+tabs, log selection, theme synchronization, bounded replay height, data font size,
+text enlargement and narrow screens. Screenshots are saved in `.local/browser/`.
+The baseline CI runs these checks on every push.
+
 ## Browser integration
 
 ```sh
@@ -52,7 +67,7 @@ the exact simulator-player assets, event stepping, rewind, time stepping, and
 download responses. Mobile/dark screenshots and browser diagnostics are written
 under ignored `.local/verification/`.
 
-The baseline CI runs Cargo tests, lint, dependency checks, and JavaScript syntax
-checks. The optional integration workflow builds the pinned external native
-toolchain and runs numerical and browser integration. Browser installation and
+The baseline CI runs Cargo tests, lint, dependency checks, JavaScript syntax
+checks and the workspace browser tests. The optional integration workflow builds
+the pinned external native toolchain and runs numerical and browser integration. Browser installation and
 native builds are not required by the default Rust build.

@@ -6,7 +6,7 @@
   },
   "simulator": {
     "repository": "https://github.com/qsbit-org/qsbit-sim.git",
-    "revision": "c98577ef8ed887452bae0b9cc4b6aeee09608553"
+    "revision": "0aa456d650bdec19b0974d901e66e832d27c8be9"
   },
   "compiler": {
     "repository": "https://github.com/qsbit-org/qsbit-compiler.git",

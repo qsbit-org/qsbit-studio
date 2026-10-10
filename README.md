@@ -35,9 +35,9 @@ not upload formats. Bloq's editor sources remain unmodified.
 ## Execution player
 
 The player has one source: **qsbit-sim**. This repository pins qsbit-sim as the
-`external/qsbit-sim` submodule and serves its `docs/_static/trace-model.js`,
-`trace-player.js`, and `site.css` directly. There is no Studio copy of the trace
-model or renderer. The Studio page supplies only the replay bundle and HTML host.
+`external/qsbit-sim` submodule and serves its `web/trace-model.js`,
+`trace-player.js`, shared styles, theme handling and self-hosted fonts directly.
+The Studio page supplies the replay bundle and HTML host.
 
 Update the player in qsbit-sim, then advance the Studio submodule and its declared
 revision together. [Architecture](docs/architecture.md) describes the boundary.

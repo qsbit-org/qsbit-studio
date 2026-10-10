@@ -64,7 +64,7 @@ pub fn router(state: Arc<Studio>) -> Router {
         .route("/api/jobs/{id}/replay", get(replay))
         .route("/api/jobs/{id}/artifacts/{name}", get(artifact))
         .route("/runs/{id}/player", get(player_page))
-        .route("/player/{name}", get(player_asset))
+        .route("/player/{*name}", get(player_asset))
         .layer(DefaultBodyLimit::max(MAX_BLOG_BYTES * 2 + 4096))
         .with_state(state)
 }
@@ -199,16 +199,15 @@ async fn serve_file(path: PathBuf, mime: &'static str, download: Option<&str>) -
 }
 
 async fn player_asset(State(state): AppState, Path(name): Path<String>) -> Response {
-    let mime = match name.as_str() {
-        "trace-model.js" | "trace-player.js" => "text/javascript; charset=utf-8",
-        "site.css" => "text/css; charset=utf-8",
-        _ => {
-            return error(
-                StatusCode::NOT_FOUND,
-                "unknown_asset",
-                "Player asset not found.",
-            );
-        }
+    let Some((_, mime)) = crate::PLAYER_ASSETS
+        .iter()
+        .find(|(asset, _)| *asset == name)
+    else {
+        return error(
+            StatusCode::NOT_FOUND,
+            "unknown_asset",
+            "Player asset not found.",
+        );
     };
     serve_file(state.config.player_root.join(name), mime, None).await
 }

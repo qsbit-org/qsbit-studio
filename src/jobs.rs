@@ -161,7 +161,7 @@ pub const ARTIFACTS: &[&str] = &[
 
 impl Studio {
     pub async fn new(mut config: Config) -> Result<Arc<Self>> {
-        for filename in ["trace-player.js", "trace-model.js", "site.css"] {
+        for (filename, _) in crate::PLAYER_ASSETS {
             ensure!(
                 config.player_root.join(filename).is_file(),
                 "Missing player asset {filename}. Run git submodule update --init, or set --player-root."

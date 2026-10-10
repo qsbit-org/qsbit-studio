@@ -904,9 +904,10 @@ dev = [
 ]
 docs = [
     { name = "breathe", specifier = ">=4.36,<5" },
-    { name = "furo", specifier = ">=2024.8,<2026" },
     { name = "myst-parser", specifier = ">=4,<5" },
+    { name = "pydata-sphinx-theme", specifier = ">=0.16,<0.17" },
     { name = "sphinx", specifier = ">=8.1,<9" },
+    { name = "sphinx-copybutton", specifier = ">=0.5,<0.6" },
 ]
 docs-test = [{ name = "playwright", specifier = ">=1.51,<2" }]
 verification = [
