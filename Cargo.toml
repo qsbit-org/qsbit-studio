@@ -1,0 +1,47 @@
+[package]
+name = "qsbit-studio"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+license = "Apache-2.0"
+description = "Compile Bloq block graphs and explore qsbit-sim execution traces."
+repository = "https://github.com/qsbit-org/qsbit-studio"
+default-run = "qsbit-studio"
+
+[features]
+default = []
+exporter = ["dep:bloq"]
+
+[dependencies]
+anyhow = "=1.0.104"
+axum = "=0.8.6"
+clap = { version = "=4.6.7", features = ["derive", "env"] }
+nix = { version = "=0.31.3", features = ["signal", "process"] }
+regex = "=1.13.1"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"
+tokio = { version = "=1.53.1", features = ["macros", "rt-multi-thread", "net", "process", "sync", "time", "fs", "signal"] }
+uuid = { version = "=1.26.1", features = ["v4", "serde"] }
+bloq = { git = "https://github.com/Zhaoyilunnn/bloq.git", rev = "0a4962595f32f5e5c63ce9cce224082c87632684", features = ["vm", "qir"], optional = true }
+
+[dev-dependencies]
+http-body-util = "=0.1.5"
+tempfile = "=3.27.0"
+tower = { version = "=0.5.3", features = ["util"] }
+
+[[bin]]
+name = "qsbit-studio"
+path = "src/main.rs"
+
+[[bin]]
+name = "qsbit-blog-export"
+path = "src/bin/export.rs"
+required-features = ["exporter"]
+
+[lints.rust]
+warnings = "deny"
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = "warn"

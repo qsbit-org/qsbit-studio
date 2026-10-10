@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>QSBIT Studio — Block graph to execution</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23087876'/%3E%3Cpath d='M8 8h16v16H8zM8 16h16M16 8v16' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/studio.css">
+  <script src="/studio.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <a class="brand" href="/"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="7"/><path d="M8 8h16v16H8zM8 16h16M16 8v16"/></svg><span>QSBIT <strong>Studio</strong></span></a>
+    <nav aria-label="Project links"><a href="https://qsbit-org.github.io/qsbit-sim/" target="_blank" rel="noopener">Simulator docs ↗</a><a href="https://github.com/qsbit-org/qsbit-studio" target="_blank" rel="noopener">GitHub ↗</a></nav>
+  </header>
+  <main>
+    <section class="intro">
+      <div><p class="eyebrow">BLOCK GRAPH → CONTROLLER → EXECUTION</p><h1>See your program<br>move through the machine.</h1><p class="lead">Upload a Bloq graph. Compile and run it on the simulated platform.<br class="desktop"> Explore every instruction, control output, and measurement.</p></div>
+      <div class="flow-mark" aria-hidden="true"><span>Graph</span><i>→</i><span>Program</span><i>→</i><span class="accent">Trace</span></div>
+    </section>
+    <div class="workspace">
+      <section class="panel source-panel" aria-labelledby="source-title">
+        <div class="panel-heading"><span class="step-number">01</span><h2 id="source-title">Your block graph</h2><span class="tag">BLOG</span></div>
+        <p class="support">In Bloq, choose <strong>Download BLOG File</strong>, then upload the <code>.blog</code> file here.</p>
+        <label class="dropzone" id="dropzone" for="file-input">
+          <input id="file-input" type="file" accept=".blog,text/plain">
+          <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 31V9m-8 8 8-8 8 8M10 30v9h28v-9"/></svg>
+          <strong>Drop your .blog file</strong><span>or click to browse · up to 256 KiB</span>
+        </label>
+        <div class="source-meta" id="source-meta" hidden><strong id="filename"></strong><span id="file-size"></span><button id="clear-file" type="button" class="text-button">Clear</button></div>
+        <pre id="source-preview" class="source-preview" hidden aria-label="Uploaded BLOG source"></pre>
+        <button type="button" id="example" class="text-button example">Try a distance-3 X-memory example ↗</button>
+        <form id="run-form">
+          <div class="settings"><label>Code distance<select id="distance"><option value="3">3</option><option value="5">5</option><option value="7">7</option></select></label><label>Seed<input id="seed" type="number" value="1" min="0" max="4294967295" step="1" required></label></div>
+          <label class="backend-label">Simulation backend<select id="backend"><option value="stim">Stim · ideal quantum simulation</option><option value="mock">Mock · controller execution only</option></select></label>
+          <p class="field-note" id="backend-note">Ideal Clifford evolution, without injected noise.</p>
+          <button class="primary" id="run" type="submit" disabled>Compile &amp; run <span aria-hidden="true">→</span></button>
+        </form>
+        <p class="preset-note">Ideal controller · 20 ns gates · 40 ns acquisition<br>One shot per run. Graphs must fit 32 physical qubits.</p>
+        <p id="upload-error" class="error" role="alert" hidden></p>
+      </section>
+      <section class="panel execution-panel" aria-labelledby="execution-title">
+        <div class="panel-heading"><span class="step-number">02</span><h2 id="execution-title">Execution</h2><span class="status-badge" id="status-badge">Ready when you are</span></div>
+        <div class="empty-state" id="empty-state"><div class="empty-diagram" aria-hidden="true"><span>CPU</span><i>→</i><span>TCU</span><i>→</i><span>Device</span></div><h3>The machine is waiting.</h3><p>Start a run to inspect its execution timeline<br>and see the measured results.</p></div>
+        <div id="run-status" hidden>
+          <div class="run-heading"><div><strong id="run-name"></strong><p id="run-description"></p></div><button id="cancel" class="secondary" type="button" hidden>Cancel run</button></div>
+          <ol id="stages" class="stages" aria-label="Run progress"><li data-stage="exporting">Prepare</li><li data-stage="compiling">Compile</li><li data-stage="simulating">Run</li><li data-stage="analysing">Inspect</li></ol>
+          <pre id="run-error" class="error diagnostic" role="alert" hidden></pre>
+          <div id="metrics" class="metrics" hidden></div>
+          <div id="result-detail" hidden><div class="detail-heading"><h3>Measured outputs</h3><span id="delivery"></span></div><p id="output-note" class="field-note"></p><div class="output-scroll"><table><thead><tr><th scope="col">Output</th><th scope="col">Bit</th></tr></thead><tbody id="outputs"></tbody></table></div></div>
+          <div id="downloads" class="downloads" hidden><h3>Run artifacts</h3><div id="artifact-links"></div></div>
+        </div>
+      </section>
+    </div>
+    <section class="history" id="history" hidden aria-label="Runs in this session"><span>SESSION RUNS</span><div id="history-list"></div><button type="button" id="remove-run" class="text-button" hidden>Remove selected run</button></section>
+    <section id="replay-section" class="replay-section" hidden aria-labelledby="replay-title"><div class="replay-title"><div><p class="eyebrow">EXECUTION EXPLORER</p><h2 id="replay-title">Inside the simulated platform</h2><p>Step through recorded simulation time. Playback controls navigate the completed run.</p></div><a id="open-replay" class="secondary" target="_blank" rel="noopener">Open replay ↗</a></div><iframe id="replay" title="qsbit-sim execution trace replay"></iframe></section>
+  </main>
+  <footer><span>QSBIT Studio · early development</span><span id="player-version">Execution player maintained by qsbit-sim</span></footer>
+  <noscript>JavaScript is required to submit runs and replay execution.</noscript>
+</body>
+</html>

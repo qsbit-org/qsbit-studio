@@ -1,0 +1,63 @@
+name: Native and browser integration
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-24.04
+    container: ubuntu:26.04
+    timeout-minutes: 45
+    steps:
+      - name: Install native tools
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates curl git build-essential cmake ninja-build python3 python3-venv \
+            clang clang-21 llvm-21-dev llvm-21-tools lld-21 pkg-config
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: true
+      - name: Install Rust and optional Python tools
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup.sh
+          sh /tmp/rustup.sh -y --profile minimal --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          python3 -m venv .venv
+          .venv/bin/python -m pip install uv==0.12.7
+          .venv/bin/uv sync --frozen --extra stim --group build --group browser
+      - name: Build the pinned simulator
+        working-directory: external/qsbit-sim
+        run: |
+          "$GITHUB_WORKSPACE/.venv/bin/conan" config install conan/config
+          "$GITHUB_WORKSPACE/.venv/bin/conan" install . -pr:a=conan/profiles/clang --build=missing -c tools.build:jobs=2
+          cmake --preset clang-ninja -DBUILD_TESTING=OFF -DQSBIT_BUILD_EXAMPLES=OFF \
+            -DQSBIT_PYTHON_BACKENDS=ON -DPython3_EXECUTABLE="$GITHUB_WORKSPACE/.venv/bin/python"
+          cmake --build --preset clang-ninja --parallel 2
+          cmake --install build-clang --prefix /tmp/qsbit-toolchain
+      - name: Check out and build the pinned compiler
+        run: |
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          pin = json.loads(Path('toolchain.lock.json').read_text())['compiler']
+          subprocess.run(['git', 'clone', pin['repository'], '/tmp/qsbit-compiler'], check=True)
+          subprocess.run(['git', '-C', '/tmp/qsbit-compiler', 'checkout', pin['revision']], check=True)
+          PY
+          cmake -S /tmp/qsbit-compiler -B /tmp/qsbit-compiler/build -G Ninja \
+            -DCMAKE_CXX_COMPILER=clang++-21 -DBUILD_TESTING=OFF \
+            -DCMAKE_PREFIX_PATH=/tmp/qsbit-toolchain
+          cmake --build /tmp/qsbit-compiler/build --parallel 2
+          cmake --install /tmp/qsbit-compiler/build --prefix /tmp/qsbit-toolchain
+      - name: Build Studio
+        run: cargo build --locked --features exporter
+      - name: Install browser and exercise real uploads
+        run: |
+          .venv/bin/playwright install --with-deps chromium
+          .venv/bin/python tests/end_to_end.py --compiler /tmp/qsbit-toolchain/bin/qsbitc \
+            --simulator /tmp/qsbit-toolchain/bin/qsbit-sim --browser
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: studio-verification
+          path: .local/verification/

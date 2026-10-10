@@ -1,0 +1,28 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  rust:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: true
+      - name: Install the pinned Rust toolchain
+        run: rustup show
+      - name: Provision locked dependencies
+        run: cargo fetch --locked
+      - name: Check formatting
+        run: cargo fmt --all --check
+      - name: Lint Rust
+        run: cargo clippy --locked --offline --all-targets --features exporter -- -D warnings
+      - name: Test Rust and API boundaries
+        run: cargo test --locked --offline --features exporter
+      - name: Check shared source pins and JavaScript
+        run: |
+          python3 tests/check_dependencies.py
+          node --check web/studio.js

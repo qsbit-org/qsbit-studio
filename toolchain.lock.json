@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "bloq": {
+    "repository": "https://github.com/Zhaoyilunnn/bloq.git",
+    "revision": "0a4962595f32f5e5c63ce9cce224082c87632684"
+  },
+  "simulator": {
+    "repository": "https://github.com/qsbit-org/qsbit-sim.git",
+    "revision": "c98577ef8ed887452bae0b9cc4b6aeee09608553"
+  },
+  "compiler": {
+    "repository": "https://github.com/qsbit-org/qsbit-compiler.git",
+    "revision": "31c2675ffd6c21115c2fb0adf9d1e46be0341b2d"
+  }
+}
