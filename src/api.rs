@@ -81,7 +81,7 @@ async fn health(State(state): AppState) -> Json<Value> {
     Json(
         json!({"schema":1,"version":env!("CARGO_PKG_VERSION"),"upload_format":"blog",
         "max_upload_bytes":MAX_BLOG_BYTES,"max_jobs":state.config.max_jobs,
-        "targets":state.targets.keys().collect::<Vec<_>>(),"default_target":state.default_target,"bloq_revision":crate::BLOQ_REVISION,"player_revision":crate::PLAYER_REVISION}),
+        "targets":state.targets.keys().collect::<Vec<_>>(),"default_target":state.default_target,"bloq_revision":crate::BLOQ_REVISION,"installation":state.installation,"player_root":state.player_root,"player_override":state.config.player_root.is_some()}),
     )
 }
 
@@ -121,6 +121,13 @@ async fn submit(
             StatusCode::BAD_REQUEST,
             "unknown_target",
             "Unknown target selection.",
+        );
+    }
+    if matches!(request.backend, crate::jobs::Backend::Stim) && !state.installation.python_enabled {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "backend_unavailable",
+            "Stim requires a Python-enabled qsbit-sim installation.",
         );
     }
     match state.submit(request).await {
@@ -220,7 +227,7 @@ async fn player_asset(State(state): AppState, Path(name): Path<String>) -> Respo
             "Player asset not found.",
         );
     };
-    serve_file(state.config.player_root.join(name), mime, None).await
+    serve_file(state.player_root.join(name), mime, None).await
 }
 
 async fn artifact(State(state): AppState, Path((id, name)): Path<(Uuid, String)>) -> Response {

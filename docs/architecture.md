@@ -33,15 +33,16 @@ These settings describe a demonstration controller, not measured hardware.
 The service launches the exporter, `qsbitc`, and a fresh `qsbit-sim` process for
 each job. It passes arguments directly without shell interpolation. The generated
 run profile retains the compiler's target settings and overrides only the chosen
-backend, seed, output paths, trace-stall filter, and optional Python adapter path.
+backend, seed, output paths, and trace-stall filter.
 
 ## Execution player ownership
 
 The only trace reducer and renderer are qsbit-sim's `trace-model.js` and
 `trace-player.js`. Shared typography, colors, styles and theme handling also come
 from qsbit-sim's `web/` directory.
-Studio serves those exact bytes through `/player/` from its pinned simulator
-submodule. Studio's JavaScript handles uploads, task state, metrics, theme
+At startup Studio invokes the selected simulator's `--installation-info` and
+validates schema 1 and player API 1. It serves the reported `web_root` bytes
+through `/player/`. Studio's JavaScript handles uploads, task state, metrics, theme
 synchronization and workspace tabs.
 
 The server converts JSONL records and the simulator summary into the existing
@@ -49,11 +50,16 @@ schema-1 replay bundle. The HTML host marks the player as standalone and passes
 that bundle URL. Each selected run gets an independent iframe document so player
 initialization, event listeners, and playback timers belong to one recording.
 
-Changing the player requires a change in qsbit-sim. Advance the gitlink and
-`PLAYER_REVISION` and `toolchain.lock.json` together and run the dependency and
-browser checks. A development
-`--player-root` override uses that checkout's actual bytes; the declared revision
-still identifies the repository's baseline pin.
+The simulator installation owns its native executable, Python environment, backend
+package, and player assets. Studio does not select Python or import backend
+packages. Each job records the discovered metadata and resolved executable in
+`installation.json`. Stop Studio before upgrading that installation, then restart
+to discover the new resources. Native integration CI builds the latest default
+branches of both native tools and records the actual revisions.
+
+A development `--player-root` override is recorded explicitly in health and job
+metadata; replay revision is null because custom assets have no verified revision.
+
 
 ## Observations and results
 

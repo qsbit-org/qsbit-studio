@@ -14,8 +14,8 @@ use tower::ServiceExt;
 async fn setup(max_jobs: u32) -> (tempfile::TempDir, Arc<Studio>, Router) {
     let directory = tempfile::tempdir().unwrap();
     let mut config = Config::parse_from(["test"]);
-    config.player_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("external/qsbit-sim/web");
-    config.work_dir = directory.path().to_owned();
+    configure_runtime(&mut config, directory.path());
+    config.work_dir = Some(directory.path().to_owned());
     config.exporter = Some("/bin/false".into());
     config.max_jobs = max_jobs;
     let state = Studio::new(config).await.unwrap();
@@ -52,7 +52,7 @@ fn upload() -> Value {
 }
 
 #[tokio::test]
-async fn player_assets_are_the_exact_simulator_sources() {
+async fn player_assets_are_the_exact_discovered_files() {
     let (_directory, state, app) = setup(1).await;
     for (filename, mime) in qsbit_studio::PLAYER_ASSETS {
         let response = app
@@ -70,12 +70,12 @@ async fn player_assets_are_the_exact_simulator_sources() {
         let bytes = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(
             bytes.as_ref(),
-            std::fs::read(state.config.player_root.join(filename)).unwrap()
+            std::fs::read(state.player_root.join(filename)).unwrap()
         );
     }
     let (status, health) = request(&app, "GET", "/api/health", Value::Null).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(health["player_revision"], qsbit_studio::PLAYER_REVISION);
+    assert_eq!(health["installation"]["revision"], "test-build");
     assert_eq!(health["upload_format"], "blog");
     state.shutdown().await;
 }
@@ -171,24 +171,69 @@ async fn body_size_limit_prevents_large_uploads() {
 }
 
 #[tokio::test]
-async fn selected_venv_interpreter_keeps_its_symlink_path() {
+async fn installation_discovery_rejects_missing_resources_and_unknown_interfaces() {
     let directory = tempfile::tempdir().unwrap();
-    let interpreter = directory.path().join("python");
-    std::os::unix::fs::symlink("/bin/sh", &interpreter).unwrap();
     let mut config = Config::parse_from(["test"]);
-    config.player_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("external/qsbit-sim/web");
-    config.work_dir = directory.path().join("runs");
-    config.python = Some(interpreter.clone());
-    let state = Studio::new(config).await.unwrap();
-    assert_eq!(state.config.python.as_ref(), Some(&interpreter));
+    configure_runtime(&mut config, directory.path());
+    config.simulator = "/bin/true".into();
+    assert!(Studio::new(config.clone()).await.is_err());
+    configure_runtime(&mut config, directory.path());
+    let path = directory.path().join("installation.json");
+    let mut info: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    info["player_api"] = 999.into();
+    std::fs::write(&path, info.to_string()).unwrap();
+    assert!(Studio::new(config.clone()).await.is_err());
+    info["player_api"] = 1.into();
+    std::fs::write(path, info.to_string()).unwrap();
+    std::fs::remove_file(directory.path().join("web/trace-model.js")).unwrap();
+    assert!(Studio::new(config).await.is_err());
+}
+
+#[tokio::test]
+async fn core_only_simulator_rejects_stim_before_creating_a_job() {
+    let (_directory, state, app) = setup(1).await;
+    let mut body = upload();
+    body["backend"] = "stim".into();
+    let (status, response) = request(&app, "POST", "/api/jobs", body).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(response["error"]["code"], "backend_unavailable");
+    assert!(state.jobs.read().await.is_empty());
     state.shutdown().await;
 }
 
+fn configure_runtime(config: &mut Config, directory: &std::path::Path) {
+    let web = directory.join("web");
+    for (asset, _) in qsbit_studio::PLAYER_ASSETS {
+        let path = web.join(asset);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, format!("fixture {asset}")).unwrap();
+    }
+    let info = json!({"schema":1,"version":"test","revision":"test-build", "installed":true,
+        "player_api":1,"web_root":web,"python_enabled":false,"python":null,"backend":null});
+    std::fs::write(directory.join("installation.json"), info.to_string()).unwrap();
+    config.compiler = "/bin/true".into();
+    config.exporter = Some("/bin/false".into());
+    config.simulator = mock_tool(directory, "simulator-default", "exit 1");
+}
+
 fn mock_tool(directory: &std::path::Path, name: &str, script: &str) -> PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let path = directory.join(name);
-    std::fs::write(&path, format!("#!/bin/sh\nset -e\n{script}\n")).unwrap();
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let contents = format!(
+        "#!/bin/sh\nset -e\nif [ \"${{1:-}}\" = --installation-info ]; then cat \"$(dirname -- \"$0\")/installation.json\"; exit; fi\n{script}\n"
+    );
+    // Write in a child: another parallel test's fork must not inherit a writable
+    // descriptor to this executable, which would make exec fail with ETXTBSY.
+    let status = std::process::Command::new("/bin/sh")
+        .args([
+            "-c",
+            "printf '%s' \"$2\" > \"$1\" && chmod 755 \"$1\"",
+            "write-fixture",
+        ])
+        .arg(&path)
+        .arg(contents)
+        .status()
+        .unwrap();
+    assert!(status.success());
     path
 }
 
@@ -217,9 +262,8 @@ async fn model_faults_and_nonzero_program_status_keep_validated_replays() {
     ] {
         let directory = tempfile::tempdir().unwrap();
         let mut config = Config::parse_from(["test"]);
-        config.player_root =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("external/qsbit-sim/web");
-        config.work_dir = directory.path().join("runs");
+        configure_runtime(&mut config, directory.path());
+        config.work_dir = Some(directory.path().join("runs"));
         config.exporter = Some(mock_tool(
             directory.path(),
             "export",
@@ -264,8 +308,8 @@ async fn model_faults_and_nonzero_program_status_keep_validated_replays() {
 async fn queued_and_running_jobs_can_be_cancelled_without_starting_more_work() {
     let directory = tempfile::tempdir().unwrap();
     let mut config = Config::parse_from(["test"]);
-    config.player_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("external/qsbit-sim/web");
-    config.work_dir = directory.path().join("runs");
+    configure_runtime(&mut config, directory.path());
+    config.work_dir = Some(directory.path().join("runs"));
     config.max_running = 1;
     config.exporter = Some(mock_tool(directory.path(), "export", "sleep 30"));
     let state = Studio::new(config).await.unwrap();
@@ -342,8 +386,9 @@ async fn target_selection_snapshots_configuration_and_rejects_unknown_ids() {
     let device = br#"{"schema":1,"name":"device","ports":4}"#;
     std::fs::write(&second, device).unwrap();
     let mut config = Config::parse_from(["test"]);
+    configure_runtime(&mut config, directory.path());
     config.targets = vec![first, second.clone()];
-    config.work_dir = directory.path().join("runs");
+    config.work_dir = Some(directory.path().join("runs"));
     config.exporter = Some("/bin/false".into());
     let state = Studio::new(config).await.unwrap();
     let app = router(state.clone());

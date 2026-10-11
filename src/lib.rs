@@ -2,6 +2,7 @@ pub mod api;
 pub mod artifact;
 pub mod jobs;
 pub mod process;
+pub mod runtime;
 pub mod target;
 
 use std::{net::SocketAddr, path::PathBuf};
@@ -9,7 +10,6 @@ use std::{net::SocketAddr, path::PathBuf};
 use clap::Parser;
 
 pub const BLOQ_REVISION: &str = "0a4962595f32f5e5c63ce9cce224082c87632684";
-pub const PLAYER_REVISION: &str = "0aa456d650bdec19b0974d901e66e832d27c8be9";
 pub const PLAYER_ASSETS: &[(&str, &str)] = &[
     ("trace-model.js", "text/javascript; charset=utf-8"),
     ("trace-player.js", "text/javascript; charset=utf-8"),
@@ -37,30 +37,25 @@ pub struct Config {
     #[arg(long, env = "QSBIT_COMPILER", default_value = "qsbitc")]
     pub compiler: PathBuf,
     /// Target JSON files offered to clients; the first is the default.
-    #[arg(long = "target", default_value = "presets/studio-ideal-v1.json")]
+    #[arg(long = "target")]
     pub targets: Vec<PathBuf>,
     #[arg(long, env = "QSBIT_SIMULATOR", default_value = "qsbit-sim")]
     pub simulator: PathBuf,
     /// Defaults to qsbit-blog-export beside the Studio executable.
     #[arg(long, env = "QSBIT_BLOG_EXPORTER")]
     pub exporter: Option<PathBuf>,
-    #[arg(long, default_value = "external/qsbit-sim/web")]
-    pub player_root: PathBuf,
+    /// Explicit development override for simulator player resources.
+    #[arg(long)]
+    pub player_root: Option<PathBuf>,
     /// Run artifacts are session-scoped and removed on clean shutdown.
-    #[arg(long, default_value = ".local/runs")]
-    pub work_dir: PathBuf,
+    #[arg(long)]
+    pub work_dir: Option<PathBuf>,
     #[arg(long, default_value = "32", value_parser = clap::value_parser!(u32).range(1..=128))]
     pub max_jobs: u32,
     #[arg(long, default_value = "2", value_parser = clap::value_parser!(u32).range(1..=8))]
     pub max_running: u32,
     #[arg(long, default_value = "120", value_parser = clap::value_parser!(u64).range(1..=600))]
     pub stage_timeout_seconds: u64,
-    /// Optional interpreter for the simulator's Python bridge.
-    #[arg(long, env = "QSBIT_PYTHON")]
-    pub python: Option<PathBuf>,
-    /// Optional directory containing qsbit_backend.
-    #[arg(long)]
-    pub python_path: Option<PathBuf>,
 }
 
 impl Config {

@@ -3,9 +3,5 @@
   "bloq": {
     "repository": "https://github.com/Zhaoyilunnn/bloq.git",
     "revision": "0a4962595f32f5e5c63ce9cce224082c87632684"
-  },
-  "simulator": {
-    "repository": "https://github.com/qsbit-org/qsbit-sim.git",
-    "revision": "0aa456d650bdec19b0974d901e66e832d27c8be9"
   }
 }

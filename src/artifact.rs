@@ -300,7 +300,14 @@ pub fn inspect_run(directory: &Path, filename: &str) -> Result<Metrics> {
         Vec::new()
     };
     let metrics = metrics_for(&events, &summary, &export, outputs)?;
-    let bundle = json!({"schema": 1, "revision": crate::PLAYER_REVISION, "examples": [{
+    let installation: Value =
+        serde_json::from_slice(&fs::read(directory.join("installation.json"))?)?;
+    let revision = if installation["player_override"] == true {
+        Value::Null
+    } else {
+        installation["installation"]["revision"].clone()
+    };
+    let bundle = json!({"schema": 1, "revision": revision, "examples": [{
         "name": filename, "program": "", "configuration": summary.get("configuration"),
         "cores": summary.get("cores"), "backend": summary["backend"], "events": events
     }]});

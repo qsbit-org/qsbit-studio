@@ -10,8 +10,6 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          submodules: true
       - name: Install the pinned Rust toolchain
         run: rustup show
       - name: Provision locked dependencies
@@ -33,7 +31,8 @@ jobs:
           .venv/bin/python -m pip install uv==0.12.7
           .venv/bin/uv sync --frozen --group browser
           .venv/bin/python -m playwright install --with-deps chromium
-          .venv/bin/python tests/workspace.py
+          git clone --depth 1 https://github.com/qsbit-org/qsbit-sim.git .local/player-source
+          .venv/bin/python tests/workspace.py --player-root .local/player-source/web
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

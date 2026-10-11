@@ -1,8 +1,7 @@
 # Testing
 
-Run checks from the Studio repository root after initializing the simulator
-submodule. Provision Rust dependencies once with `cargo fetch --locked`; tests
-and lint then run offline.
+Run checks from the Studio repository root. Provision Rust dependencies once
+with `cargo fetch --locked`; tests and lint then run offline.
 
 ```sh
 cargo fmt --all --check
@@ -17,16 +16,17 @@ bounds, trace schemas, coincident/decreasing timestamps, terminal summary matchi
 epoch-scoped measurement latencies, tool failure diagnostics, cancellation,
 timeouts, output limits, and symlink rejection. API tests cover malformed and
 oversized uploads, retained-job capacity and removal, missing replay behavior,
-virtual-environment interpreter selection, and exact shared-player asset bytes.
+installation discovery failures, and exact discovered player asset bytes.
 
 ## Real toolchain integration
 
 Build both Rust binaries, install the native compiler and simulator, and select a
-Python-enabled simulator for Stim. Optional dependencies stay in the local venv:
+Python-enabled simulator with its dedicated installed Stim environment. The test
+runner uses a separate venv for independent reference calculations:
 
 ```sh
-uv sync --frozen --extra stim
-uv run --frozen --extra stim python tests/end_to_end.py \
+uv sync --frozen --group integration
+uv run --frozen --group integration python tests/end_to_end.py \
   --studio target/debug/qsbit-studio --compiler qsbitc --simulator qsbit-sim
 ```
 
@@ -37,7 +37,7 @@ trace timestamps, compares metrics to observations, and independently verifies
 the measurement records using the exported Stim reference's detector converter.
 It also checks invalid graphs and a graph whose distance exceeds controller
 capacity, selects a second target with different gate/reset durations, and verifies
-that the selected configuration reaches the generated simulator profile. It does not use a prerecorded trace as the uploaded graph's result.
+that the selected configuration reaches the generated simulator profile.
 
 ## Workspace checks
 
@@ -45,7 +45,7 @@ that the selected configuration reaches the generated simulator profile. It does
 cargo build --locked --offline --bin qsbit-studio
 uv sync --frozen --group browser
 uv run --frozen --group browser playwright install chromium
-uv run --frozen --group browser python tests/workspace.py
+uv run --frozen --group browser python tests/workspace.py --player-root /path/to/qsbit-sim/web
 ```
 
 Set `QSBIT_BROWSER_EXECUTABLE` to use an existing Chromium executable instead of
@@ -60,9 +60,9 @@ The baseline CI runs these checks on every push.
 ## Browser integration
 
 ```sh
-uv sync --frozen --extra stim --group browser
-uv run --frozen --extra stim --group browser playwright install chromium
-uv run --frozen --extra stim --group browser python tests/end_to_end.py \
+uv sync --frozen --group integration --group browser
+uv run --frozen --group integration --group browser playwright install chromium
+uv run --frozen --group integration --group browser python tests/end_to_end.py \
   --studio target/debug/qsbit-studio --compiler qsbitc --simulator qsbit-sim --browser
 ```
 
@@ -73,6 +73,13 @@ under ignored `.local/verification/`.
 
 The baseline CI runs Cargo tests, lint, dependency checks, JavaScript syntax
 checks and the workspace browser tests. The optional integration workflow builds
-the pinned simulator and the latest qsbit-compiler default branch and runs
+the latest simulator and compiler default branches and runs
 numerical and browser integration. Browser installation and native builds are not
 required by the default Rust build.
+
+To verify installed operation, use `make install PREFIX=/path/to/prefix` and run
+`tests/end_to_end.py` with `--studio /path/to/prefix/bin/qsbit-studio --installed
+--polluted-environment` plus the native tool paths. It launches from an unrelated
+directory, poisons outer Python settings, and checks installed player resources.
+`tests/installed_startup.py --prefix /path/to/prefix` additionally checks PATH-based
+discovery, the installed default target, and the default cache directory.

@@ -14,24 +14,23 @@ and `qsbit-sim` following the [simulator build instructions](https://github.com/
 The simulator must support the selected backend. The BLOG adapter also uses the
 LLVM optimizer and assembler required by Bloq's pinned QIR exporter.
 
-The pinned simulator checkout used for the player can also be built as the
-simulator; Studio never builds it implicitly. Dependency provisioning and native
-builds use each project's standard CMake workflow.
-
-Initialize the player sources and build both Studio executables:
+Install both Studio executables and the default target preset:
 
 ```sh
-git submodule update --init
-cargo build --locked --features exporter
+make install PREFIX="$HOME/.local"
+export PATH="$HOME/.local/bin:$PATH"
+qsbit-studio
 ```
 
-On Linux, run with installed native executables on PATH:
+After adding the installation's `bin` directory to PATH, launch Studio from any
+working directory. No active Python venv or Studio source checkout is needed.
+`qsbit-blog-export` is installed beside Studio; `qsbitc` is installed by the
+compiler's CMake install into its prefix's `bin` directory. Both are native
+executables. The BLOG exporter also requires LLVM tools on PATH; the compiler
+itself does not require Python. Optional compiler Python helpers are separate.
 
-```sh
-cargo run --locked
-```
-
-Or select local native builds:
+For development, `cargo build --locked --features exporter` copies the default
+preset beside the build output. Select local native builds explicitly:
 
 ```sh
 cargo run --locked -- \
@@ -45,9 +44,10 @@ commands. The default exporter is `qsbit-blog-export` beside the server binary.
 
 ## Target selection
 
-The default target is `presets/studio-ideal-v1.json`, read at startup rather than
-embedded in the executable. Edit its timing and resource settings and restart
-Studio; no Rust rebuild is needed. Load additional ideal or fixed-device targets:
+The installed default target is `PREFIX/share/qsbit-studio/presets/studio-ideal-v1.json`,
+resolved from the Studio executable and read at startup. A development build uses
+`target/debug/presets/studio-ideal-v1.json` (or the selected build profile). Edit
+its timing and resource settings and restart Studio; no Rust rebuild is needed. Load additional ideal or fixed-device targets:
 
 ```sh
 cargo run --locked -- \
@@ -66,24 +66,40 @@ Native integration CI builds qsbit-compiler from the latest commit on its remote
 default branch and logs the selected commit. The compiler is not version-pinned.
 For local development, select a compiler build with `--compiler`. Ideal targets
 require a compiler supporting the `ideal` configuration and a simulator with
-native reset support. The player submodule is independent of executable selection.
+native reset support and the `--installation-info` discovery interface.
 
-## Optional Stim backend
+## Simulator installation and upgrades
 
-Python dependencies are declared in [pyproject.toml](../pyproject.toml) and resolved
-in [uv.lock](../uv.lock). The backend package comes from the pinned simulator
-submodule rather than a Studio implementation.
+Follow the simulator's [installed Python runtime workflow](https://qsbit-org.github.io/qsbit-sim/building.html#install-with-a-python-backend).
+The default layout is:
 
-```sh
-uv sync --frozen --extra stim
-uv run --frozen --extra stim cargo run --locked
+```text
+PREFIX/bin/qsbit-sim                       launcher
+PREFIX/lib/qsbit-sim/qsbit-sim-native       native executable
+PREFIX/lib/qsbit-sim/runtime.json           installation metadata
+PREFIX/lib/qsbit-sim/venv/                  dedicated Python environment
+PREFIX/lib/qsbit-sim/web/                   matching player assets
 ```
 
-The simulator selects the active virtual environment. For an existing environment,
-pass `--python PATH_TO_ENV/bin/python`. The path is preserved even if it is a
-symlink, so the simulator uses that environment's packages. `--python-path` can
-point to a directory containing an externally installed `qsbit_backend` package.
-Neither option installs packages.
+The simulator's installation step requires its backend package from the same
+checkout, installed non-editably in the dedicated environment. Its Python
+major/minor version must match the linked Python library. The installed simulator
+ignores outer `VIRTUAL_ENV`, `QSBIT_PYTHON`, and Python import-path variables.
+Studio obtains the player path and runtime metadata from `--installation-info`
+at startup; missing resources or unsupported interface versions fail startup.
+Studio has no Python runtime flags or dependency on `qsbit_backend`.
+
+Treat the prefix as a fixed installation location: venvs are not relocatable.
+Keep the base Python installation and native shared libraries available. Normal
+launches never install packages or access the network. To upgrade, stop Studio
+and active simulations, update the simulator checkout, provision its locked
+runtime dependencies and backend in the same prefix, rebuild and reinstall,
+then restart Studio. Reinstallation updates native code, metadata, and web assets;
+it validates the matching backend before replacing the native executable.
+Do not replace installation files while Studio or simulations are running.
+A Python version change requires recreating the dedicated venv and rebuilding the
+bridge with that interpreter. Installing elsewhere requires selecting that new
+simulator on PATH or through `--simulator`.
 
 ## Service configuration
 
@@ -94,12 +110,10 @@ The server currently targets Linux and uses Unix process groups for teardown.
 | --- | --- |
 | `--listen` | `127.0.0.1:3000`; use port 0 for an OS-assigned port. |
 | `--compiler`, `--simulator` | Installed `qsbitc` and `qsbit-sim`; environment overrides are `QSBIT_COMPILER` and `QSBIT_SIMULATOR`. |
-| `--target` | Repeatable target JSON path; defaults to `presets/studio-ideal-v1.json`. First target is the default selection. |
+| `--target` | Repeatable target JSON path; defaults to the preset beside the build or under the installation’s `share` directory. First target is the default selection. |
 | `--exporter` | Exporter beside the Studio binary; `QSBIT_BLOG_EXPORTER` overrides it. |
-| `--player-root` | `external/qsbit-sim/web`; supports another simulator checkout for development. |
-| `--python` | Optional simulator interpreter; also accepts `QSBIT_PYTHON`. |
-| `--python-path` | Optional simulator Python adapter directory. |
-| `--work-dir` | `.local/runs`; Studio creates a fresh owned session directory. |
+| `--player-root` | Discovered from the simulator; explicit override for development, labeled as custom resources. |
+| `--work-dir` | `$XDG_CACHE_HOME/qsbit-studio/runs` or `$HOME/.cache/qsbit-studio/runs`; creates an owned session directory. |
 | `--max-jobs` | 32 retained jobs; full capacity returns HTTP 503. |
 | `--max-running` | Two concurrently executing pipelines; others queue. |
 | `--stage-timeout-seconds` | 120 host seconds per native stage. |
@@ -112,7 +126,7 @@ application limits, not an OS memory sandbox.
 Run artifacts survive page reload within the same server session. Removing a
 terminal run deletes its directory and releases capacity. SIGINT/SIGTERM cancels
 queued/running jobs, kills their process groups, and removes session artifacts
-after teardown. An unclean process exit can leave directories in `.local/runs`;
+after teardown. An unclean process exit can leave directories in the configured cache;
 the next launch creates a new session and does not resume old jobs.
 
 The service has no authentication or tenant isolation. Hosted multiuser operation

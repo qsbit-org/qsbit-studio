@@ -1,8 +1,10 @@
 """Check workspace layout and asynchronous selection with controlled API responses."""
 
 import argparse
+import json
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 from playwright.sync_api import expect, sync_playwright
@@ -11,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / ".local/browser"
 OUTPUT.mkdir(parents=True, exist_ok=True)
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--player-root", default=str(ROOT / "external/qsbit-sim/web"))
+parser.add_argument("--player-root", type=Path, required=True)
 args = parser.parse_args()
 
 
@@ -242,6 +244,26 @@ def check(base):
         browser.close()
 
 
+fixture = tempfile.TemporaryDirectory(prefix="studio-workspace-")
+fixture_root = Path(fixture.name)
+(fixture_root / "installation.json").write_text(
+    json.dumps(
+        {
+            "schema": 1,
+            "version": "fixture",
+            "revision": "browser-fixture",
+            "installed": False,
+            "player_api": 1,
+            "web_root": str(args.player_root.resolve()),
+            "python_enabled": False,
+            "python": None,
+            "backend": None,
+        }
+    )
+)
+simulator = fixture_root / "simulator"
+simulator.write_text('#!/bin/sh\ncat "$(dirname -- "$0")/installation.json"\n')
+simulator.chmod(0o755)
 process = subprocess.Popen(
     [
         str(ROOT / "target/debug/qsbit-studio"),
@@ -250,11 +272,11 @@ process = subprocess.Popen(
         "--compiler",
         "/bin/true",
         "--simulator",
-        "/bin/true",
+        str(simulator),
         "--exporter",
         "/bin/true",
-        "--player-root",
-        args.player_root,
+        "--work-dir",
+        str(fixture_root / "runs"),
     ],
     cwd=ROOT,
     stdout=subprocess.PIPE,
@@ -268,4 +290,5 @@ try:
 finally:
     process.terminate()
     process.wait(timeout=15)
+    fixture.cleanup()
 print("PASS workspace layout, theme, keyboard navigation and asynchronous selection")

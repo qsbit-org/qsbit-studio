@@ -16,25 +16,35 @@ jobs:
             ca-certificates curl git build-essential cmake ninja-build python3 python3-venv \
             clang clang-21 llvm-21-dev llvm-21-tools lld-21 pkg-config
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          submodules: true
       - name: Install Rust and optional Python tools
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup.sh
           sh /tmp/rustup.sh -y --profile minimal --default-toolchain none
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-          python3 -m venv .venv
-          .venv/bin/python -m pip install uv==0.12.7
-          .venv/bin/uv sync --frozen --extra stim --group build --group browser
-      - name: Build the pinned simulator
-        working-directory: external/qsbit-sim
+          python3 -m venv /tmp/qsbit-build-tools
+          /tmp/qsbit-build-tools/bin/python -m pip install uv==0.12.7
+          echo "/tmp/qsbit-build-tools/bin" >> "$GITHUB_PATH"
+          /tmp/qsbit-build-tools/bin/uv sync --frozen --group integration --group browser
+      - name: Provision the latest simulator from its default branch
         run: |
-          "$GITHUB_WORKSPACE/.venv/bin/conan" config install conan/config
-          "$GITHUB_WORKSPACE/.venv/bin/conan" install . -pr:a=conan/profiles/clang --build=missing -c tools.build:jobs=2
+          git clone --depth 1 https://github.com/qsbit-org/qsbit-sim.git /tmp/qsbit-sim
+          git -C /tmp/qsbit-sim rev-parse HEAD
+          uv sync --project /tmp/qsbit-sim --frozen --group build --extra stim
+          uv export --project /tmp/qsbit-sim --frozen --extra stim --no-dev --no-emit-project \
+            --format requirements-txt > /tmp/qsbit-runtime-requirements.txt
+          uv venv --python /tmp/qsbit-sim/.venv/bin/python /tmp/qsbit-toolchain/lib/qsbit-sim/venv
+          uv pip sync --python /tmp/qsbit-toolchain/lib/qsbit-sim/venv/bin/python /tmp/qsbit-runtime-requirements.txt
+          uv pip install --python /tmp/qsbit-toolchain/lib/qsbit-sim/venv/bin/python --no-deps /tmp/qsbit-sim
+      - name: Build and install the matching simulator
+        working-directory: /tmp/qsbit-sim
+        run: |
+          .venv/bin/conan config install conan/config
+          .venv/bin/conan install . -pr:a=conan/profiles/clang --build=missing -c tools.build:jobs=2
           cmake --preset clang-ninja -DBUILD_TESTING=OFF -DQSBIT_BUILD_EXAMPLES=OFF \
-            -DQSBIT_PYTHON_BACKENDS=ON -DPython3_EXECUTABLE="$GITHUB_WORKSPACE/.venv/bin/python"
+            -DQSBIT_PYTHON_BACKENDS=ON -DPython3_EXECUTABLE=/tmp/qsbit-toolchain/lib/qsbit-sim/venv/bin/python
           cmake --build --preset clang-ninja --parallel 2
           cmake --install build-clang --prefix /tmp/qsbit-toolchain
+          /tmp/qsbit-toolchain/bin/qsbit-sim --installation-info
       - name: Build the latest compiler from its default branch
         run: |
           git clone --depth 1 https://github.com/qsbit-org/qsbit-compiler.git /tmp/qsbit-compiler
@@ -45,12 +55,14 @@ jobs:
           cmake --build /tmp/qsbit-compiler/build --parallel 2
           cmake --install /tmp/qsbit-compiler/build --prefix /tmp/qsbit-toolchain
       - name: Build Studio
-        run: cargo build --locked --features exporter
+        run: make install PREFIX=/tmp/qsbit-toolchain
       - name: Install browser and exercise real uploads
         run: |
           .venv/bin/playwright install --with-deps chromium
-          .venv/bin/python tests/end_to_end.py --compiler /tmp/qsbit-toolchain/bin/qsbitc \
-            --simulator /tmp/qsbit-toolchain/bin/qsbit-sim --browser
+          .venv/bin/python tests/installed_startup.py --prefix /tmp/qsbit-toolchain
+          .venv/bin/python tests/end_to_end.py --studio /tmp/qsbit-toolchain/bin/qsbit-studio \
+            --compiler /tmp/qsbit-toolchain/bin/qsbitc \
+            --simulator /tmp/qsbit-toolchain/bin/qsbit-sim --installed --polluted-environment --browser
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

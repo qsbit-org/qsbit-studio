@@ -79,9 +79,6 @@ pub async fn run_stage(
         .stderr(Stdio::from(log))
         .kill_on_drop(true);
     command.as_std_mut().process_group(0);
-    if let Some(python) = &config.python {
-        command.env("QSBIT_PYTHON", python);
-    }
     let mut child = command.spawn().with_context(|| {
         format!(
             "Cannot start {}. Configure its executable path.",

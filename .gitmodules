@@ -1,3 +1,0 @@
-[submodule "external/qsbit-sim"]
-	path = external/qsbit-sim
-	url = https://github.com/qsbit-org/qsbit-sim.git

@@ -1,14 +1,14 @@
 """Exercise real BLOG uploads through native compilation, simulation, and replay."""
 
 import argparse
-import os
 import collections
 import hashlib
 import json
+import os
 import queue
 import shutil
 import subprocess
-import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -21,6 +21,8 @@ parser.add_argument("--studio", default="target/debug/qsbit-studio")
 parser.add_argument("--compiler", default="qsbitc")
 parser.add_argument("--simulator", default="qsbit-sim")
 parser.add_argument("--browser", action="store_true")
+parser.add_argument("--installed", action="store_true")
+parser.add_argument("--polluted-environment", action="store_true")
 args = parser.parse_args()
 OUTPUT = ROOT / ".local/verification"
 OUTPUT.mkdir(parents=True, exist_ok=True)
@@ -221,6 +223,33 @@ slow_target["ideal"]["measurement_duration_ns"] = 80
 slow_target["ideal"]["reset_duration_ns"] = 80
 slow_path = OUTPUT / "slow-ideal.json"
 slow_path.write_text(json.dumps(slow_target))
+default_target = (
+    Path(executable(args.studio)).parent.parent
+    / "share/qsbit-studio/presets/studio-ideal-v1.json"
+    if args.installed
+    else ROOT / "presets/studio-ideal-v1.json"
+)
+launch_directory = tempfile.TemporaryDirectory(prefix="studio-launch-")
+environment = dict(os.environ)
+for name in (
+    "QSBIT_PYTHON",
+    "VIRTUAL_ENV",
+    "PYTHONPATH",
+    "PYTHONHOME",
+    "PYTHONUSERBASE",
+):
+    environment.pop(name, None)
+environment["XDG_CACHE_HOME"] = str(OUTPUT / "cache")
+if args.polluted_environment:
+    poison = Path(launch_directory.name) / "qsbit_backend"
+    poison.mkdir()
+    (poison / "__init__.py").write_text("raise RuntimeError('wrong backend loaded')\n")
+    environment.update(
+        QSBIT_PYTHON="/missing/python",
+        VIRTUAL_ENV="/missing/venv",
+        PYTHONHOME="/missing/home",
+        PYTHONPATH=launch_directory.name,
+    )
 log = (OUTPUT / "server.log").open("w")
 process = subprocess.Popen(
     [
@@ -231,14 +260,13 @@ process = subprocess.Popen(
         executable(args.compiler),
         "--simulator",
         executable(args.simulator),
-        "--python",
-        sys.executable,
         "--target",
-        str(ROOT / "presets/studio-ideal-v1.json"),
+        str(default_target),
         "--target",
         str(slow_path),
     ],
-    cwd=ROOT,
+    cwd=launch_directory.name,
+    env=environment,
     stdout=subprocess.PIPE,
     stderr=log,
     text=True,
@@ -253,6 +281,10 @@ try:
     assert line.startswith("QSBIT Studio: http://"), line
     base = line.split()[-1]
     source = (ROOT / "examples/x-memory.blog").read_text()
+    health = api("/api/health")
+    player_root = Path(health["player_root"])
+    if args.installed:
+        assert health["installation"]["installed"]
     for asset in (
         "trace-model.js",
         "trace-player.js",
@@ -266,13 +298,14 @@ try:
         "fonts/source-code-pro.woff2",
     ):
         payload, _ = http(f"/player/{asset}")
-        assert payload == (ROOT / "external/qsbit-sim/web" / asset).read_bytes()
+        assert payload == (player_root / asset).read_bytes()
     # Failed inputs cannot silently become a gallery example's run.
-    for invalid_source, distance, stage in [("BLOG 1.0\nthis is not a graph", 3, "exporting"), (source, 5, "compiling")]:
+    for invalid_source, distance, stage in [
+        ("BLOG 1.0\nthis is not a graph", 3, "exporting"),
+        (source, 5, "compiling"),
+    ]:
         report = finished(submit(invalid_source, distance)["id"])
-        assert report["stage"] == "failed" and report["failed_stage"] == stage, (
-            report
-        )
+        assert report["stage"] == "failed" and report["failed_stage"] == stage, report
         assert not report["replay_ready"]
         api(f"/api/jobs/{report['id']}", method="DELETE")
     alternate = finished(submit(source, target="slow-ideal")["id"])
@@ -280,7 +313,9 @@ try:
     assert alternate["target"] == "slow-ideal"
     assert json.loads(artifact(alternate_id, "target.json")) == slow_target
     profile = json.loads(artifact(alternate_id, "run.json"))["profile"]
-    actions = [action for mapping in profile["mappings"] for action in mapping["actions"]]
+    actions = [
+        action for mapping in profile["mappings"] for action in mapping["actions"]
+    ]
     assert any(a["operation"] == "reset" and a["duration"] == 80 for a in actions)
     assert any(a["operation"] == "h" and a["duration"] == 40 for a in actions)
     identifier = verify_run(finished(submit(source)["id"]))
@@ -297,3 +332,4 @@ finally:
     reader.join(timeout=1)
     process.stdout.close()
     log.close()
+    launch_directory.cleanup()

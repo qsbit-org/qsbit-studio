@@ -130,6 +130,8 @@ pub struct Job {
 
 pub struct Studio {
     pub config: Config,
+    pub installation: crate::runtime::Installation,
+    pub player_root: PathBuf,
     pub default_target: String,
     pub targets: BTreeMap<String, Vec<u8>>,
     pub directory: PathBuf,
@@ -140,6 +142,7 @@ pub struct Studio {
 pub const ARTIFACTS: &[&str] = &[
     "input.blog",
     "request.json",
+    "installation.json",
     "program.ll",
     "program.bc",
     "program.bloqir",
@@ -166,45 +169,40 @@ pub const ARTIFACTS: &[&str] = &[
 
 impl Studio {
     pub async fn new(mut config: Config) -> Result<Arc<Self>> {
-        let (default_target, targets) = crate::target::load_targets(&config.targets)?;
+        config.simulator = crate::runtime::executable(&config.simulator)?;
+        config.compiler = crate::runtime::executable(&config.compiler)?;
+        config.exporter = Some(crate::runtime::executable(&config.exporter_path()?)?);
+        let installation = crate::runtime::discover(&config.simulator).await?;
+        let player_root = config
+            .player_root
+            .as_ref()
+            .unwrap_or(&installation.web_root)
+            .canonicalize()
+            .context("Simulator player directory is missing")?;
         for (filename, _) in crate::PLAYER_ASSETS {
             ensure!(
-                config.player_root.join(filename).is_file(),
-                "Missing player asset {filename}. Run git submodule update --init, or set --player-root."
+                player_root.join(filename).is_file(),
+                "Missing player asset {filename}; reinstall qsbit-sim or correct --player-root."
             );
         }
-        config.player_root = config.player_root.canonicalize()?;
-        // A venv interpreter is normally a symlink. Preserve its venv path:
-        // resolving it to the base executable changes Python's environment.
-        if let Some(path) = &config.python {
-            ensure!(path.is_file(), "Python interpreter does not exist.");
-            config.python = Some(std::path::absolute(path)?);
+        if config.targets.is_empty() {
+            config.targets.push(crate::runtime::default_target()?);
         }
-        for executable in [&mut config.compiler, &mut config.simulator] {
-            if executable.components().count() > 1 {
-                *executable = std::path::absolute(&*executable)?;
-            }
-        }
-        if let Some(path) = &config.exporter
-            && path.components().count() > 1
-        {
-            config.exporter = Some(std::path::absolute(path)?);
-        }
-        if let Some(path) = &config.python_path {
-            config.python_path = Some(
-                path.canonicalize()
-                    .context("Python adapter directory does not exist.")?,
-            );
-        }
-        fs::create_dir_all(&config.work_dir).await?;
-        let directory = config
-            .work_dir
+        let (default_target, targets) = crate::target::load_targets(&config.targets)?;
+        let work_dir = match &config.work_dir {
+            Some(path) => std::path::absolute(path)?,
+            None => crate::runtime::default_work_dir()?,
+        };
+        fs::create_dir_all(&work_dir).await?;
+        let directory = work_dir
             .canonicalize()?
             .join(format!("session-{}", Uuid::new_v4()));
         fs::create_dir(&directory).await?;
         Ok(Arc::new(Self {
             running: Arc::new(Semaphore::new(config.max_running as usize)),
             config,
+            installation,
+            player_root,
             default_target,
             targets,
             directory,
@@ -215,6 +213,10 @@ impl Studio {
     pub async fn submit(self: &Arc<Self>, request: RunRequest) -> Result<Arc<Job>> {
         use sha2::{Digest, Sha256};
         request.validate()?;
+        ensure!(
+            !matches!(request.backend, Backend::Stim) || self.installation.python_enabled,
+            "Stim requires a Python-enabled qsbit-sim installation."
+        );
         let target = request.target.as_ref().unwrap_or(&self.default_target);
         let target_bytes = self.targets.get(target).context("Unknown target")?;
         let mut jobs = self.jobs.write().await;
@@ -227,7 +229,15 @@ impl Studio {
         fs::create_dir(&directory).await?;
         fs::write(directory.join("input.blog"), &request.source).await?;
         fs::write(directory.join("target.json"), target_bytes).await?;
-        fs::write(directory.join("request.json"), serde_json::to_vec_pretty(&serde_json::json!({"filename":request.filename,"distance":request.distance,"seed":request.seed,"backend":request.backend,"target":target,"bloq_revision":crate::BLOQ_REVISION,"player_revision":crate::PLAYER_REVISION}))?).await?;
+        fs::write(directory.join("request.json"), serde_json::to_vec_pretty(&serde_json::json!({"filename":request.filename,"distance":request.distance,"seed":request.seed,"backend":request.backend,"target":target,"bloq_revision":crate::BLOQ_REVISION,"simulator_revision":self.installation.revision}))?).await?;
+        fs::write(
+            directory.join("installation.json"),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "simulator":self.config.simulator, "installation":self.installation,
+                "player_root":self.player_root, "player_override":self.config.player_root.is_some()
+            }))?,
+        )
+        .await?;
         let (cancel, _) = watch::channel(false);
         let job = Arc::new(Job {
             directory,
@@ -343,9 +353,6 @@ impl Studio {
         run["summary"] = "summary.json".into();
         run["memory_dump"] = "memory.bin".into();
         run["trace_stalls"] = false.into();
-        if let Some(path) = &self.config.python_path {
-            run["python_path"] = path.to_string_lossy().as_ref().into();
-        }
         fs::write(
             job.directory.join("run.json"),
             serde_json::to_vec_pretty(&run)?,

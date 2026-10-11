@@ -12,17 +12,17 @@ run it, and inspect the results.
 Install **[qsbit-compiler](https://github.com/qsbit-org/qsbit-compiler#build)**
 and **[qsbit-sim](https://github.com/qsbit-org/qsbit-sim#build)** first.
 Both `qsbitc` and `qsbit-sim` must be on PATH. Enable the simulator's
-[Python bridge](https://qsbit-org.github.io/qsbit-sim/backends.html#python-runtime)
-for Stim.
+[Python bridge](https://qsbit-org.github.io/qsbit-sim/building.html#install-with-a-python-backend)
+for Stim, including its dedicated installed Python environment. Studio uses that
+installation’s Python backend and player assets; activating a venv is unnecessary.
 
-On Linux, with Rust, LLVM 21 tools, and [uv](https://docs.astral.sh/uv/) installed,
+On Linux, with Rust and LLVM 21 tools installed,
 run from the repository root:
 
 ```sh
-git submodule update --init
-cargo build --locked --features exporter
-uv sync --frozen --extra stim
-uv run --frozen --extra stim cargo run --locked
+make install PREFIX="$HOME/.local"
+export PATH="$HOME/.local/bin:$PATH"
+qsbit-studio
 ```
 
 ## Use

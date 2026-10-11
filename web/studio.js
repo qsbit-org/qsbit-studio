@@ -227,7 +227,7 @@ window.addEventListener('qsbit-theme-change', syncTheme);
 async function restoreSession() {
   try {
     const info = await api('/api/health');
-    $('player-version').textContent = `qsbit-sim player · ${info.player_revision.slice(0, 7)}`;
+    $('player-version').textContent = info.player_override ? 'qsbit-sim player · custom resources' : `qsbit-sim player · ${info.installation.revision.slice(0, 12)}`;
     for (const id of info.targets) {
       const option = document.createElement('option'); option.value = id; option.textContent = id;
       $('target').append(option);

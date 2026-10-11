@@ -26,6 +26,9 @@ The defaults are distance 3, Stim, seed 1, and the first configured target.
 `target` selects a server-configured filename stem, never a client filesystem path.
 Unknown selections return HTTP 400. Reports and `request.json` record the resolved
 selection; `target.json` preserves its configuration bytes.
+`installation.json` records the resolved simulator, its startup discovery response,
+and the effective player directory/override. A Stim request against a simulator
+without Python support returns HTTP 400 with `backend_unavailable`.
 
 HTTP 202 returns a job report with an opaque UUID. Invalid input returns 400/422,
 oversized HTTP bodies return 413, and retained-job capacity returns 503 with
@@ -36,7 +39,7 @@ parsing, compilation, backend validation, or execution.
 
 | Endpoint | Behavior |
 | --- | --- |
-| `GET /api/health` | Service version, upload format, capacity, target IDs (`targets`), default target (`default_target`), and baseline Bloq/player revisions. |
+| `GET /api/health` | Service version, upload format, capacity, target IDs (`targets`), default target (`default_target`), Bloq revision, simulator `installation` metadata, effective `player_root`, and `player_override`. |
 | `GET /api/jobs` | Current server-session reports in submission order. |
 | `GET /api/jobs/{id}` | Current status, stage timings, metrics, diagnostics, and available artifact names. |
 | `POST /api/jobs/{id}/cancel` | Request cancellation; 202 does not mean teardown has finished. Terminal jobs return 409. |
