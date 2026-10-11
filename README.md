@@ -7,6 +7,9 @@ QSBIT Studio runs [Bloq](https://github.com/inmzhang/bloq) experiments in a loca
 web interface: upload a [BLOG file](https://github.com/inmzhang/bloq/blob/main/docs/graphs/blog.md),
 run it, and inspect the results.
 
+> [!NOTE]
+> A hosted web version of QSBIT Studio is planned.
+
 ## Build
 
 On Linux, install Rust, LLVM 21 tools, [qsbit-compiler](https://github.com/qsbit-org/qsbit-compiler#build)
