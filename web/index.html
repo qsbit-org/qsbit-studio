@@ -32,11 +32,12 @@
       <button type="button" id="example" class="text-button example">Use X-memory example</button>
       <form id="run-form">
         <div class="settings"><label>Code distance<select id="distance"><option value="3">3</option><option value="5">5</option><option value="7">7</option></select></label><label>Seed<input id="seed" type="number" value="1" min="0" max="4294967295" step="1" required></label></div>
+        <label class="backend-label">Target<select id="target" disabled></select></label>
         <label class="backend-label">Backend<select id="backend"><option value="stim">Stim · ideal quantum simulation</option><option value="mock">Mock · controller execution</option></select></label>
         <p class="field-note" id="backend-note">Ideal Clifford evolution, without injected noise.</p>
         <button class="primary" id="run" type="submit" disabled>Compile &amp; run →</button>
       </form>
-      <p class="preset-note">20 ns gates · 40 ns acquisition<br>One shot per run · up to 32 physical qubits</p>
+      <p class="preset-note">Timing and capacity follow the selected target.<br>One shot per run</p>
       <p id="upload-error" class="error" role="alert" hidden></p>
       <section class="history" id="history" hidden aria-label="Runs in this session"><h2>Session runs</h2><div id="history-list"></div><button type="button" id="remove-run" hidden>Remove selected run</button></section>
     </aside>

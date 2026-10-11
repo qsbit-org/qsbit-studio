@@ -8,10 +8,7 @@ use clap::Parser;
 use serde_json::json;
 
 #[derive(Parser)]
-#[command(
-    version,
-    about = "Compile a BLOG graph into verified QIR and a Studio target."
-)]
+#[command(version, about = "Compile a BLOG graph into verified QIR.")]
 struct Args {
     input: PathBuf,
     #[arg(long)]
@@ -37,11 +34,6 @@ fn main() -> Result<()> {
     let program = bloq::vm::lower(&ir, &bloq::vm::LoweringConfig::default())
         .context("lower physical program")?;
     ensure!(
-        program.qubit_count <= 32,
-        "The graph needs {} physical qubits; the controller limit is 32.",
-        program.qubit_count
-    );
-    ensure!(
         !program
             .tasks
             .iter()
@@ -64,7 +56,6 @@ fn main() -> Result<()> {
     };
     let artifact =
         bloq::qir::emit_program_qir(&program, &options).context("export Adaptive QIR")?;
-    let target = qsbit_studio::target::target_for_qir(&artifact.llvm_ir, artifact.qubit_count)?;
     fs::create_dir_all(&args.output)?;
     fs::write(args.output.join("program.ll"), &artifact.llvm_ir)?;
     fs::write(args.output.join("program.bc"), &artifact.bitcode)?;
@@ -72,10 +63,6 @@ fn main() -> Result<()> {
     fs::write(
         args.output.join("program.vm.json"),
         program.to_json_pretty()?,
-    )?;
-    fs::write(
-        args.output.join("target.json"),
-        serde_json::to_vec_pretty(&target)?,
     )?;
     let output_labels: Vec<_> = (0..program.record_count)
         .map(|id| format!("record:{id}"))
@@ -88,7 +75,7 @@ fn main() -> Result<()> {
     let metadata = json!({"schema": 1, "bloq_revision": qsbit_studio::BLOQ_REVISION,
         "distance": args.distance, "qubits": artifact.qubit_count, "results": artifact.result_count,
         "measurement_records": program.record_count, "output_labels": output_labels,
-        "decoder": null, "preset": "studio-ideal-v1"});
+        "decoder": null});
     fs::write(
         args.output.join("export.json"),
         serde_json::to_vec_pretty(&metadata)?,

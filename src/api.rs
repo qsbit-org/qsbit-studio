@@ -81,7 +81,7 @@ async fn health(State(state): AppState) -> Json<Value> {
     Json(
         json!({"schema":1,"version":env!("CARGO_PKG_VERSION"),"upload_format":"blog",
         "max_upload_bytes":MAX_BLOG_BYTES,"max_jobs":state.config.max_jobs,
-        "preset":"studio-ideal-v1","bloq_revision":crate::BLOQ_REVISION,"player_revision":crate::PLAYER_REVISION}),
+        "targets":state.targets.keys().collect::<Vec<_>>(),"default_target":state.default_target,"bloq_revision":crate::BLOQ_REVISION,"player_revision":crate::PLAYER_REVISION}),
     )
 }
 
@@ -111,6 +111,17 @@ async fn submit(
     };
     if let Err(reason) = request.validate() {
         return error(StatusCode::BAD_REQUEST, "invalid_input", reason);
+    }
+    if request
+        .target
+        .as_ref()
+        .is_some_and(|id| !state.targets.contains_key(id))
+    {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "unknown_target",
+            "Unknown target selection.",
+        );
     }
     match state.submit(request).await {
         Ok(job) => (StatusCode::ACCEPTED, Json(job.report.lock().await.clone())).into_response(),

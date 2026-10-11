@@ -1,6 +1,7 @@
 """Exercise real BLOG uploads through native compilation, simulation, and replay."""
 
 import argparse
+import os
 import collections
 import hashlib
 import json
@@ -50,7 +51,7 @@ def api(path, body=None, method=None):
     return json.loads(payload) if payload else None
 
 
-def submit(source, distance=3, seed=7):
+def submit(source, distance=3, seed=7, target="studio-ideal-v1"):
     return api(
         "/api/jobs",
         {
@@ -59,6 +60,7 @@ def submit(source, distance=3, seed=7):
             "distance": distance,
             "backend": "stim",
             "seed": seed,
+            "target": target,
         },
     )
 
@@ -143,7 +145,9 @@ def browser_check():
     from playwright.sync_api import expect, sync_playwright
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch()
+        browser = playwright.chromium.launch(
+            executable_path=os.environ.get("QSBIT_BROWSER_EXECUTABLE")
+        )
         page = browser.new_page(viewport={"width": 1440, "height": 1100})
         errors = []
         page.on("pageerror", lambda error: errors.append(str(error)))
@@ -152,6 +156,7 @@ def browser_check():
         expect(page.locator("#status-badge")).to_have_text("Completed", timeout=10000)
         page.locator("#file-input").set_input_files(ROOT / "examples/x-memory.blog")
         expect(page.locator("#filename")).to_have_text("x-memory.blog")
+        page.locator("#target").select_option("slow-ideal")
         expect(page.locator("#run")).to_be_enabled()
         with page.expect_response(
             lambda response: (
@@ -162,6 +167,7 @@ def browser_check():
         ) as submission:
             page.locator("#run").click()
         submitted = submission.value.json()
+        assert submitted["target"] == "slow-ideal"
         verify_run(finished(submitted["id"]))
         expect(page.locator("#replay")).to_have_attribute(
             "src", f"/runs/{submitted['id']}/player", timeout=180000
@@ -208,6 +214,13 @@ def browser_check():
         browser.close()
 
 
+slow_target = json.loads((ROOT / "presets/studio-ideal-v1.json").read_text())
+slow_target["name"] = "slow-ideal"
+slow_target["ideal"]["gate_duration_ns"] = 40
+slow_target["ideal"]["measurement_duration_ns"] = 80
+slow_target["ideal"]["reset_duration_ns"] = 80
+slow_path = OUTPUT / "slow-ideal.json"
+slow_path.write_text(json.dumps(slow_target))
 log = (OUTPUT / "server.log").open("w")
 process = subprocess.Popen(
     [
@@ -220,6 +233,10 @@ process = subprocess.Popen(
         executable(args.simulator),
         "--python",
         sys.executable,
+        "--target",
+        str(ROOT / "presets/studio-ideal-v1.json"),
+        "--target",
+        str(slow_path),
     ],
     cwd=ROOT,
     stdout=subprocess.PIPE,
@@ -251,13 +268,21 @@ try:
         payload, _ = http(f"/player/{asset}")
         assert payload == (ROOT / "external/qsbit-sim/web" / asset).read_bytes()
     # Failed inputs cannot silently become a gallery example's run.
-    for invalid_source, distance in [("BLOG 1.0\nthis is not a graph", 3), (source, 5)]:
+    for invalid_source, distance, stage in [("BLOG 1.0\nthis is not a graph", 3, "exporting"), (source, 5, "compiling")]:
         report = finished(submit(invalid_source, distance)["id"])
-        assert report["stage"] == "failed" and report["failed_stage"] == "exporting", (
+        assert report["stage"] == "failed" and report["failed_stage"] == stage, (
             report
         )
         assert not report["replay_ready"]
         api(f"/api/jobs/{report['id']}", method="DELETE")
+    alternate = finished(submit(source, target="slow-ideal")["id"])
+    alternate_id = verify_run(alternate)
+    assert alternate["target"] == "slow-ideal"
+    assert json.loads(artifact(alternate_id, "target.json")) == slow_target
+    profile = json.loads(artifact(alternate_id, "run.json"))["profile"]
+    actions = [action for mapping in profile["mappings"] for action in mapping["actions"]]
+    assert any(a["operation"] == "reset" and a["duration"] == 80 for a in actions)
+    assert any(a["operation"] == "h" and a["duration"] == 40 for a in actions)
     identifier = verify_run(finished(submit(source)["id"]))
     if args.browser:
         browser_check()

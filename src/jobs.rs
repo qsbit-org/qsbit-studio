@@ -43,6 +43,8 @@ pub struct RunRequest {
     pub seed: u32,
     #[serde(default)]
     pub backend: Backend,
+    #[serde(default)]
+    pub target: Option<String>,
 }
 
 fn default_distance() -> u32 {
@@ -101,6 +103,7 @@ impl Stage {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Report {
+    pub target: String,
     pub id: Uuid,
     pub submitted_at_ms: u64,
     pub filename: String,
@@ -127,6 +130,8 @@ pub struct Job {
 
 pub struct Studio {
     pub config: Config,
+    pub default_target: String,
+    pub targets: BTreeMap<String, Vec<u8>>,
     pub directory: PathBuf,
     pub jobs: RwLock<BTreeMap<Uuid, Arc<Job>>>,
     pub running: Arc<Semaphore>,
@@ -161,6 +166,7 @@ pub const ARTIFACTS: &[&str] = &[
 
 impl Studio {
     pub async fn new(mut config: Config) -> Result<Arc<Self>> {
+        let (default_target, targets) = crate::target::load_targets(&config.targets)?;
         for (filename, _) in crate::PLAYER_ASSETS {
             ensure!(
                 config.player_root.join(filename).is_file(),
@@ -199,6 +205,8 @@ impl Studio {
         Ok(Arc::new(Self {
             running: Arc::new(Semaphore::new(config.max_running as usize)),
             config,
+            default_target,
+            targets,
             directory,
             jobs: RwLock::new(BTreeMap::new()),
         }))
@@ -207,6 +215,8 @@ impl Studio {
     pub async fn submit(self: &Arc<Self>, request: RunRequest) -> Result<Arc<Job>> {
         use sha2::{Digest, Sha256};
         request.validate()?;
+        let target = request.target.as_ref().unwrap_or(&self.default_target);
+        let target_bytes = self.targets.get(target).context("Unknown target")?;
         let mut jobs = self.jobs.write().await;
         ensure!(
             jobs.len() < self.config.max_jobs as usize,
@@ -216,12 +226,14 @@ impl Studio {
         let directory = self.directory.join(id.to_string());
         fs::create_dir(&directory).await?;
         fs::write(directory.join("input.blog"), &request.source).await?;
-        fs::write(directory.join("request.json"), serde_json::to_vec_pretty(&serde_json::json!({"filename":request.filename,"distance":request.distance,"seed":request.seed,"backend":request.backend,"preset":"studio-ideal-v1","bloq_revision":crate::BLOQ_REVISION,"player_revision":crate::PLAYER_REVISION}))?).await?;
+        fs::write(directory.join("target.json"), target_bytes).await?;
+        fs::write(directory.join("request.json"), serde_json::to_vec_pretty(&serde_json::json!({"filename":request.filename,"distance":request.distance,"seed":request.seed,"backend":request.backend,"target":target,"bloq_revision":crate::BLOQ_REVISION,"player_revision":crate::PLAYER_REVISION}))?).await?;
         let (cancel, _) = watch::channel(false);
         let job = Arc::new(Job {
             directory,
             cancel,
             report: Mutex::new(Report {
+                target: target.clone(),
                 id,
                 submitted_at_ms: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)?
@@ -451,6 +463,7 @@ mod tests {
             distance,
             seed: 1,
             backend: Backend::Mock,
+            target: None,
         };
         assert!(
             request("memory.blog", "BLOG 1.0\n0: ZXX [0,0,0]", 3)

@@ -332,3 +332,60 @@ async fn queued_and_running_jobs_can_be_cancelled_without_starting_more_work() {
     assert_eq!(report["replay_ready"], false);
     state.shutdown().await;
 }
+
+#[tokio::test]
+async fn target_selection_snapshots_configuration_and_rejects_unknown_ids() {
+    let directory = tempfile::tempdir().unwrap();
+    let first = directory.path().join("ideal.json");
+    let second = directory.path().join("device.json");
+    std::fs::write(&first, r#"{"schema":1,"name":"ideal"}"#).unwrap();
+    let device = br#"{"schema":1,"name":"device","ports":4}"#;
+    std::fs::write(&second, device).unwrap();
+    let mut config = Config::parse_from(["test"]);
+    config.targets = vec![first, second.clone()];
+    config.work_dir = directory.path().join("runs");
+    config.exporter = Some("/bin/false".into());
+    let state = Studio::new(config).await.unwrap();
+    let app = router(state.clone());
+    let (_, health) = request(&app, "GET", "/api/health", Value::Null).await;
+    assert_eq!(health["default_target"], "ideal");
+    assert_eq!(health["targets"], json!(["device", "ideal"]));
+    // Edits after startup cannot change the configuration of queued jobs.
+    std::fs::write(second, "{}").unwrap();
+    let mut body = upload();
+    body["target"] = "device".into();
+    let (status, report) = request(&app, "POST", "/api/jobs", body.clone()).await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    assert_eq!(report["target"], "device");
+    let id = report["id"].as_str().unwrap();
+    let job = state.get(id.parse().unwrap()).await.unwrap();
+    assert_eq!(
+        std::fs::read(job.directory.join("target.json")).unwrap(),
+        device
+    );
+    let saved: Value =
+        serde_json::from_slice(&std::fs::read(job.directory.join("request.json")).unwrap())
+            .unwrap();
+    assert_eq!(saved["target"], "device");
+    let (_, report) = request(&app, "POST", "/api/jobs", upload()).await;
+    assert_eq!(report["target"], "ideal");
+    body["target"] = "../unknown".into();
+    assert_eq!(
+        request(&app, "POST", "/api/jobs", body).await.0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(state.jobs.read().await.len(), 2);
+    state.shutdown().await;
+}
+
+#[test]
+fn target_catalog_rejects_duplicate_ids_and_invalid_json() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("target.json");
+    std::fs::write(&path, "{}").unwrap();
+    assert!(qsbit_studio::target::load_targets(&[path.clone(), path.clone()]).is_err());
+    for invalid in ["[]", "invalid"] {
+        std::fs::write(&path, invalid).unwrap();
+        assert!(qsbit_studio::target::load_targets(std::slice::from_ref(&path)).is_err());
+    }
+}

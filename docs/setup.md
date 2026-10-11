@@ -43,6 +43,31 @@ Relative executable paths are resolved from the launch directory. Commands run
 in isolated job directories; uploaded filenames are never used as paths or shell
 commands. The default exporter is `qsbit-blog-export` beside the server binary.
 
+## Target selection
+
+The default target is `presets/studio-ideal-v1.json`, read at startup rather than
+embedded in the executable. Edit its timing and resource settings and restart
+Studio; no Rust rebuild is needed. Load additional ideal or fixed-device targets:
+
+```sh
+cargo run --locked -- \
+  --compiler ../qsbit-compiler/build-clang/qsbitc \
+  --target presets/studio-ideal-v1.json \
+  --target /path/to/device.json
+```
+
+The first target is the default; each filename stem must be unique. Select a
+target for each run in the browser. The server snapshots files at startup and
+copies the chosen bytes into each job's `target.json`. Backend and seed remain
+per-run settings. Explicit device targets use the compiler's normal target format.
+Ideal targets use its `ideal` configuration, including a native reset duration.
+
+Native integration CI builds qsbit-compiler from the latest commit on its remote
+default branch and logs the selected commit. The compiler is not version-pinned.
+For local development, select a compiler build with `--compiler`. Ideal targets
+require a compiler supporting the `ideal` configuration and a simulator with
+native reset support. The player submodule is independent of executable selection.
+
 ## Optional Stim backend
 
 Python dependencies are declared in [pyproject.toml](../pyproject.toml) and resolved
@@ -69,6 +94,7 @@ The server currently targets Linux and uses Unix process groups for teardown.
 | --- | --- |
 | `--listen` | `127.0.0.1:3000`; use port 0 for an OS-assigned port. |
 | `--compiler`, `--simulator` | Installed `qsbitc` and `qsbit-sim`; environment overrides are `QSBIT_COMPILER` and `QSBIT_SIMULATOR`. |
+| `--target` | Repeatable target JSON path; defaults to `presets/studio-ideal-v1.json`. First target is the default selection. |
 | `--exporter` | Exporter beside the Studio binary; `QSBIT_BLOG_EXPORTER` overrides it. |
 | `--player-root` | `external/qsbit-sim/web`; supports another simulator checkout for development. |
 | `--python` | Optional simulator interpreter; also accepts `QSBIT_PYTHON`. |

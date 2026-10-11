@@ -90,7 +90,7 @@ function render(report) {
   connectionState();
   $('empty-state').hidden = true; $('run-status').hidden = false;
   $('run-name').textContent = report.filename;
-  $('run-description').textContent = `Distance ${report.distance} · seed ${report.seed} · ${report.backend} · one shot`;
+  $('run-description').textContent = `Target ${report.target} · distance ${report.distance} · seed ${report.seed} · ${report.backend} · one shot`;
   $('status-badge').textContent = stageNames[report.stage]; $('status-badge').dataset.stage = report.stage;
   $('cancel').hidden = terminal(report.stage); $('cancel').disabled = false;
   const stage = report.failed_stage || report.stage;
@@ -167,7 +167,7 @@ $('run-form').addEventListener('submit', async event => {
   if (!Number.isInteger(seed) || seed < 0 || seed > 4294967295) { showError('Seed must be an integer from 0 to 4294967295.'); return; }
   submissionPending = true; updateRunButton(); showError('');
   try {
-    const report = await api('/api/jobs', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({...upload, distance:Number($('distance').value), seed, backend:$('backend').value})});
+    const report = await api('/api/jobs', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({...upload, distance:Number($('distance').value), seed, backend:$('backend').value, target:$('target').value || undefined})});
     jobs.set(report.id, report); activeJobs.add(report.id); selectJob(report.id);
     selectTab($('tab-replay')); updateRunButton(); void poll(report.id);
   } catch (error) { showError(error.message); }
@@ -228,6 +228,11 @@ async function restoreSession() {
   try {
     const info = await api('/api/health');
     $('player-version').textContent = `qsbit-sim player · ${info.player_revision.slice(0, 7)}`;
+    for (const id of info.targets) {
+      const option = document.createElement('option'); option.value = id; option.textContent = id;
+      $('target').append(option);
+    }
+    $('target').value = info.default_target; $('target').disabled = false;
     const history = await api('/api/jobs');
     for (const report of history.jobs) { jobs.set(report.id, report); if (!terminal(report.stage)) activeJobs.add(report.id); }
     // A user can submit before the history request returns. Preserve that view.

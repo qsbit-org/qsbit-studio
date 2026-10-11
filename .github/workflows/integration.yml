@@ -35,15 +35,10 @@ jobs:
             -DQSBIT_PYTHON_BACKENDS=ON -DPython3_EXECUTABLE="$GITHUB_WORKSPACE/.venv/bin/python"
           cmake --build --preset clang-ninja --parallel 2
           cmake --install build-clang --prefix /tmp/qsbit-toolchain
-      - name: Check out and build the pinned compiler
+      - name: Build the latest compiler from its default branch
         run: |
-          python3 - <<'PY'
-          import json, subprocess
-          from pathlib import Path
-          pin = json.loads(Path('toolchain.lock.json').read_text())['compiler']
-          subprocess.run(['git', 'clone', pin['repository'], '/tmp/qsbit-compiler'], check=True)
-          subprocess.run(['git', '-C', '/tmp/qsbit-compiler', 'checkout', pin['revision']], check=True)
-          PY
+          git clone --depth 1 https://github.com/qsbit-org/qsbit-compiler.git /tmp/qsbit-compiler
+          git -C /tmp/qsbit-compiler rev-parse HEAD
           cmake -S /tmp/qsbit-compiler -B /tmp/qsbit-compiler/build -G Ninja \
             -DCMAKE_CXX_COMPILER=clang++-21 -DBUILD_TESTING=OFF \
             -DCMAKE_PREFIX_PATH=/tmp/qsbit-toolchain

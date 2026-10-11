@@ -10,18 +10,25 @@ trace interpretation.
 `qsbit-blog-export` reads UTF-8 BLOG using Bloq's public Rust APIs. It compiles the
 graph into Bloq IR, lowers it into the typed Bloq VM program, and emits verified
 Adaptive QIR. The adapter rejects empty graphs, decoder-dependent tasks,
-unsupported exporter semantics, and resource counts exceeding the controller.
+and unsupported exporter semantics.
 It never replaces the uploaded graph with a built-in example.
 
 The adapter records terminal measurement slots and top-level raw observables in
 `export.json`. `reference.stim` is optional and is produced only when the same
 compiled IR supports static Stim emission.
 
-`studio-ideal-v1` derives port/codeword mappings from verified QIR calls. It uses
-20 ns gate intervals, 40 ns measurement acquisition, a 10000 ns initial target
-start, and `block_cycles: 1000`. These values describe a demonstration controller,
-not measured physical hardware. Scheduling and admission behavior remain owned
-by qsbit-compiler and qsbit-sim.
+Target files are loaded at startup using repeatable `--target` options. Their file
+stems identify selections in the UI and API; the first is the default. Studio
+snapshots the selected file as `target.json` in each job. It checks only catalog
+identity and JSON structure; qsbit-compiler validates target semantics.
+
+`presets/studio-ideal-v1.json` contains the demonstration controller parameters:
+20 ns gates, 40 ns measurement acquisition and native reset, 10000 ns initial
+start, `block_cycles: 1000`, 5 ns CPU and 20 ns TCU periods, and a 32-qubit limit.
+Its `ideal` object asks qsbit-compiler to derive resources and codeword mappings
+from validated QIR. Fixed devices instead supply explicit qubits, ports and
+mappings. Studio does not parse QIR operations or implement reset lowering.
+These settings describe a demonstration controller, not measured hardware.
 
 The service launches the exporter, `qsbitc`, and a fresh `qsbit-sim` process for
 each job. It passes arguments directly without shell interpolation. The generated

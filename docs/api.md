@@ -13,6 +13,7 @@ also use Axum's HTTP 400 extractor response.
   "filename": "memory.blog",
   "source": "BLOG 1.0\nmodule main {\n0: ZXX [0, 0, 0]\n}\n",
   "distance": 3,
+  "target": "studio-ideal-v1",
   "backend": "stim",
   "seed": 1
 }
@@ -21,7 +22,10 @@ also use Axum's HTTP 400 extractor response.
 `filename` is a basename ending in `.blog`, with at most 128 bytes. `source` is
 1–262144 UTF-8 bytes with a BLOG header. Unknown keys are rejected. Distance is
 3, 5, or 7; backend is `stim` or `mock`; seed is an unsigned 32-bit integer.
-The defaults are distance 3, Stim, and seed 1.
+The defaults are distance 3, Stim, seed 1, and the first configured target.
+`target` selects a server-configured filename stem, never a client filesystem path.
+Unknown selections return HTTP 400. Reports and `request.json` record the resolved
+selection; `target.json` preserves its configuration bytes.
 
 HTTP 202 returns a job report with an opaque UUID. Invalid input returns 400/422,
 oversized HTTP bodies return 413, and retained-job capacity returns 503 with
@@ -32,7 +36,7 @@ parsing, compilation, backend validation, or execution.
 
 | Endpoint | Behavior |
 | --- | --- |
-| `GET /api/health` | Service version, upload format, capacity, preset, and baseline Bloq/player revisions. |
+| `GET /api/health` | Service version, upload format, capacity, target IDs (`targets`), default target (`default_target`), and baseline Bloq/player revisions. |
 | `GET /api/jobs` | Current server-session reports in submission order. |
 | `GET /api/jobs/{id}` | Current status, stage timings, metrics, diagnostics, and available artifact names. |
 | `POST /api/jobs/{id}/cancel` | Request cancellation; 202 does not mean teardown has finished. Terminal jobs return 409. |

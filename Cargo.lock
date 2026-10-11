@@ -1278,7 +1278,6 @@ dependencies = [
  "clap",
  "http-body-util",
  "nix",
- "regex",
  "serde",
  "serde_json",
  "sha2",

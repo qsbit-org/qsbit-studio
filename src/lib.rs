@@ -36,6 +36,9 @@ pub struct Config {
     pub listen: SocketAddr,
     #[arg(long, env = "QSBIT_COMPILER", default_value = "qsbitc")]
     pub compiler: PathBuf,
+    /// Target JSON files offered to clients; the first is the default.
+    #[arg(long = "target", default_value = "presets/studio-ideal-v1.json")]
+    pub targets: Vec<PathBuf>,
     #[arg(long, env = "QSBIT_SIMULATOR", default_value = "qsbit-sim")]
     pub simulator: PathBuf,
     /// Defaults to qsbit-blog-export beside the Studio executable.

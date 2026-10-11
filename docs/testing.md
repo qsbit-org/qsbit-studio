@@ -12,7 +12,7 @@ node --check web/studio.js
 python3 tests/check_dependencies.py
 ```
 
-Cargo unit tests cover upload bounds, static target resource mapping, output ABI
+Cargo unit tests cover upload bounds, target selection and configuration snapshots, output ABI
 bounds, trace schemas, coincident/decreasing timestamps, terminal summary matching,
 epoch-scoped measurement latencies, tool failure diagnostics, cancellation,
 timeouts, output limits, and symlink rejection. API tests cover malformed and
@@ -36,7 +36,8 @@ uploads the X-memory BLOG, executes it using real native tools, checks the
 trace timestamps, compares metrics to observations, and independently verifies
 the measurement records using the exported Stim reference's detector converter.
 It also checks invalid graphs and a graph whose distance exceeds controller
-capacity. It does not use a prerecorded trace as the uploaded graph's result.
+capacity, selects a second target with different gate/reset durations, and verifies
+that the selected configuration reaches the generated simulator profile. It does not use a prerecorded trace as the uploaded graph's result.
 
 ## Workspace checks
 
@@ -46,6 +47,9 @@ uv sync --frozen --group browser
 uv run --frozen --group browser playwright install chromium
 uv run --frozen --group browser python tests/workspace.py
 ```
+
+Set `QSBIT_BROWSER_EXECUTABLE` to use an existing Chromium executable instead of
+the Playwright-managed browser.
 
 The browser checks use controlled API responses for empty, running, completed and
 failed states. They check file-read and deletion races, reconnection, keyboard
@@ -69,5 +73,6 @@ under ignored `.local/verification/`.
 
 The baseline CI runs Cargo tests, lint, dependency checks, JavaScript syntax
 checks and the workspace browser tests. The optional integration workflow builds
-the pinned external native toolchain and runs numerical and browser integration. Browser installation and
-native builds are not required by the default Rust build.
+the pinned simulator and the latest qsbit-compiler default branch and runs
+numerical and browser integration. Browser installation and native builds are not
+required by the default Rust build.

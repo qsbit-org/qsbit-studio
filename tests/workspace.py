@@ -1,6 +1,7 @@
 """Check workspace layout and asynchronous selection with controlled API responses."""
 
 import argparse
+import os
 import subprocess
 from pathlib import Path
 
@@ -19,6 +20,7 @@ def report(identifier, stage="completed"):
         "id": identifier,
         "filename": f"{identifier}.blog",
         "distance": 3,
+        "target": "studio-ideal-v1",
         "seed": 1,
         "backend": "stim",
         "stage": stage,
@@ -47,7 +49,9 @@ def report(identifier, stage="completed"):
 
 def check(base):
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch()
+        browser = playwright.chromium.launch(
+            executable_path=os.environ.get("QSBIT_BROWSER_EXECUTABLE")
+        )
         page = browser.new_page(viewport={"width": 1440, "height": 900})
         errors = []
         page.on("pageerror", lambda error: errors.append(str(error)))
