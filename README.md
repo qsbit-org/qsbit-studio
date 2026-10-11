@@ -1,4 +1,4 @@
-# QSBIT Studio
+# QSBIT studio
 
 [![CI](https://github.com/qsbit-org/qsbit-studio/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/qsbit-org/qsbit-studio/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/qsbit-org/qsbit-studio)](LICENSE)
