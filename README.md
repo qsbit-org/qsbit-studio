@@ -37,7 +37,11 @@ Open <http://127.0.0.1:3000>:
 
 Decoder feedback and dynamic quantum operations are not yet supported.
 
+## Learn more
+
 [Setup details](docs/setup.md) · [Architecture](docs/architecture.md) ·
 [API](docs/api.md) · [Testing](docs/testing.md)
 
-Licensed under [Apache License 2.0](LICENSE).
+## License
+
+[Apache License 2.0](LICENSE).
