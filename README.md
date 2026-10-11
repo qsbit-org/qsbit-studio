@@ -7,40 +7,30 @@ QSBIT Studio runs [Bloq](https://github.com/inmzhang/bloq) experiments in a loca
 web interface: upload a [BLOG file](https://github.com/inmzhang/bloq/blob/main/docs/graphs/blog.md),
 run it, and inspect the results.
 
-## Local setup
+## Build
 
-Install **[qsbit-compiler](https://github.com/qsbit-org/qsbit-compiler#build)**
-and **[qsbit-sim](https://github.com/qsbit-org/qsbit-sim#build)** first.
-Both `qsbitc` and `qsbit-sim` must be on PATH. Enable the simulator's
-[Python bridge](https://qsbit-org.github.io/qsbit-sim/building.html#install-with-a-python-backend)
-for Stim. Before starting Studio, activate a compatible Python environment with
-`qsbit-sim-backends` and its Stim dependencies installed. Studio passes that
-environment to the simulator and serves the installed simulator’s player assets.
-Python’s major/minor version must match the simulator bridge; see the
-[simulator backend setup](https://qsbit-org.github.io/qsbit-sim/backends.html).
-
-On Linux, with Rust and LLVM 21 tools installed,
-run from the repository root:
+On Linux, install Rust, LLVM 21 tools, [qsbit-compiler](https://github.com/qsbit-org/qsbit-compiler#build)
+and [qsbit-sim with Stim support](https://qsbit-org.github.io/qsbit-sim/building.html#install-with-a-python-backend).
+Put `qsbitc` and `qsbit-sim` on PATH, then run from the repository root:
 
 ```sh
 make install PREFIX="$HOME/.local"
 export PATH="$HOME/.local/bin:$PATH"
-source /path/to/your/venv/bin/activate
+```
+
+## Run
+
+Activate a compatible Python environment with `qsbit-sim-backends` and Stim installed:
+
+```sh
+source /path/to/venv/bin/activate
 qsbit-studio
 ```
 
-The venv can be the one used to develop qsbit-sim, prepared with
-`uv sync --frozen --extra stim` in its repository. Studio uses an existing
-environment; it does not create one or install Python packages. A missing
-interpreter or backend package causes a startup error.
-
-## Use
-
-Open <http://127.0.0.1:3000>:
-
-1. **Upload** a `.blog` file exported from the [Bloq editor](https://bloqec.com/editor/).
-2. **Run** by clicking **Compile & run**.
-3. **Inspect** the execution trace in **Replay** and measurement outputs in **Results**.
+Open <http://127.0.0.1:3000>, upload a `.blog` file from the
+[Bloq editor](https://bloqec.com/editor/), and click **Compile & run**.
+Inspect execution in **Replay** and measurements in **Results**.
+See [setup details](docs/setup.md) for Python compatibility and configuration.
 
 ## Limitations
 
