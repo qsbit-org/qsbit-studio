@@ -50,9 +50,10 @@ schema-1 replay bundle. The HTML host marks the player as standalone and passes
 that bundle URL. Each selected run gets an independent iframe document so player
 initialization, event listeners, and playback timers belong to one recording.
 
-The simulator installation owns its native executable, Python environment, backend
-package, and player assets. Studio does not select Python or import backend
-packages. Each job records the discovered metadata and resolved executable in
+The simulator installation owns its native executable and player assets. Users
+manage the Python backend package and dependencies in an external environment.
+Studio inherits its launch environment; the simulator resolves Python and imports
+the backend there. Studio does not import Python packages itself. Each job records the discovered metadata and resolved executable in
 `installation.json`. Stop Studio before upgrading that installation, then restart
 to discover the new resources. Native integration CI builds the latest default
 branches of both native tools and records the actual revisions.

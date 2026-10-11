@@ -19,11 +19,13 @@ Install both Studio executables and the default target preset:
 ```sh
 make install PREFIX="$HOME/.local"
 export PATH="$HOME/.local/bin:$PATH"
+source /path/to/your/venv/bin/activate
 qsbit-studio
 ```
 
 After adding the installation's `bin` directory to PATH, launch Studio from any
-working directory. No active Python venv or Studio source checkout is needed.
+working directory. Activate the simulator’s Python environment before launching
+Studio. The Studio source checkout is not needed at runtime.
 `qsbit-blog-export` is installed beside Studio; `qsbitc` is installed by the
 compiler's CMake install into its prefix's `bin` directory. Both are native
 executables. The BLOG exporter also requires LLVM tools on PATH; the compiler
@@ -70,36 +72,40 @@ native reset support and the `--installation-info` discovery interface.
 
 ## Simulator installation and upgrades
 
-Follow the simulator's [installed Python runtime workflow](https://qsbit-org.github.io/qsbit-sim/building.html#install-with-a-python-backend).
-The default layout is:
+Follow the simulator's [Python backend setup](https://qsbit-org.github.io/qsbit-sim/backends.html).
+Its native installation contains the executable, web assets, and metadata:
 
 ```text
 PREFIX/bin/qsbit-sim                       launcher
 PREFIX/lib/qsbit-sim/qsbit-sim-native       native executable
 PREFIX/lib/qsbit-sim/runtime.json           installation metadata
-PREFIX/lib/qsbit-sim/venv/                  dedicated Python environment
-PREFIX/lib/qsbit-sim/web/                   matching player assets
+PREFIX/lib/qsbit-sim/web/                   player assets
 ```
 
-The simulator's installation step requires its backend package from the same
-checkout, installed non-editably in the dedicated environment. Its Python
-major/minor version must match the linked Python library. The installed simulator
-ignores outer `VIRTUAL_ENV`, `QSBIT_PYTHON`, and Python import-path variables.
-Studio obtains the player path and runtime metadata from `--installation-info`
-at startup; missing resources or unsupported interface versions fail startup.
-Studio has no Python runtime flags or dependency on `qsbit_backend`.
+Users install `qsbit-sim-backends` and the required optional dependencies in an
+external Python environment. For local simulator development, `uv sync --frozen
+--extra stim` from the simulator repository prepares its `.venv`. Activate that
+environment before starting Studio:
 
-Treat the prefix as a fixed installation location: venvs are not relocatable.
-Keep the base Python installation and native shared libraries available. Normal
-launches never install packages or access the network. To upgrade, stop Studio
-and active simulations, update the simulator checkout, provision its locked
-runtime dependencies and backend in the same prefix, rebuild and reinstall,
-then restart Studio. Reinstallation updates native code, metadata, and web assets;
-it validates the matching backend before replacing the native executable.
-Do not replace installation files while Studio or simulations are running.
-A Python version change requires recreating the dedicated venv and rebuilding the
-bridge with that interpreter. Installing elsewhere requires selecting that new
-simulator on PATH or through `--simulator`.
+```sh
+source /path/to/qsbit-sim/.venv/bin/activate
+qsbit-studio
+```
+
+The simulator selects explicit `QSBIT_PYTHON` when supplied, then the active
+`VIRTUAL_ENV/bin/python`; installed commands otherwise find a matching versioned
+Python on PATH. Python's major/minor version must match the simulator bridge.
+Studio inherits these settings and obtains the actual interpreter, backend package
+location and player path from `--installation-info` at startup. A missing interpreter,
+backend package, resource or unsupported interface version fails startup. Users
+are responsible for installing the selected numerical backend's dependencies and
+keeping the Python package compatible with the native executable.
+
+Keep the linked Python library and native dependencies available. To upgrade,
+stop Studio and simulations, update native code with the simulator's normal CMake
+build/install and update the backend package in the external environment. Restart
+Studio with that environment active to refresh discovery metadata. A Python
+major/minor change requires rebuilding the native bridge against that version.
 
 ## Service configuration
 

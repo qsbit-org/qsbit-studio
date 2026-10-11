@@ -21,8 +21,9 @@ installation discovery failures, and exact discovered player asset bytes.
 ## Real toolchain integration
 
 Build both Rust binaries, install the native compiler and simulator, and select a
-Python-enabled simulator with its dedicated installed Stim environment. The test
-runner uses a separate venv for independent reference calculations:
+Python-enabled simulator and activate an environment containing its backend
+package and Stim dependencies. The test runner also needs Stim and NumPy for
+independent reference calculations:
 
 ```sh
 uv sync --frozen --group integration
