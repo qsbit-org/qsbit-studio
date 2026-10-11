@@ -35,10 +35,7 @@ Open <http://127.0.0.1:3000>:
 
 ## Limitations
 
-One shot per run, with up to 32 physical qubits including scratch qubits.
-Only closed graphs supported by the pinned Bloq exporter are accepted.
-Decoder feedback, noise, qubit placement, and routing are not supported.
-Results are uncorrected; replay shows completed runs rather than live execution.
+Decoder feedback and dynamic quantum operations are not yet supported.
 
 [Setup details](docs/setup.md) · [Architecture](docs/architecture.md) ·
 [API](docs/api.md) · [Testing](docs/testing.md)
