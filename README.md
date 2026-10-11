@@ -3,64 +3,44 @@
 [![CI](https://github.com/qsbit-org/qsbit-studio/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/qsbit-org/qsbit-studio/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/qsbit-org/qsbit-studio)](LICENSE)
 
-QSBIT Studio is a local web interface for compiling and running quantum-control
-experiments. Upload a Bloq `.blog` graph, compile it with qsbit-compiler, run it
-on qsbit-sim, and inspect the execution trace and measurement results.
+QSBIT Studio runs [Bloq](https://github.com/inmzhang/bloq) experiments in a local
+web interface: upload a [BLOG file](https://github.com/inmzhang/bloq/blob/main/docs/graphs/blog.md),
+run it, and inspect the results.
 
-[Setup](docs/setup.md) ·
-[Architecture](docs/architecture.md) ·
-[API reference](docs/api.md)
+## Local setup
 
-## Build
+Install **[qsbit-compiler](https://github.com/qsbit-org/qsbit-compiler#build)**
+and **[qsbit-sim](https://github.com/qsbit-org/qsbit-sim#build)** first.
+Both `qsbitc` and `qsbit-sim` must be on PATH. Enable the simulator's
+[Python bridge](https://qsbit-org.github.io/qsbit-sim/backends.html#python-runtime)
+for Stim.
 
-Install Rust and the [native tools](docs/setup.md#native-tools), then run from
-the repository root on Linux:
+On Linux, with Rust, LLVM 21 tools, and [uv](https://docs.astral.sh/uv/) installed,
+run from the repository root:
 
 ```sh
 git submodule update --init
 cargo build --locked --features exporter
-```
-
-## Run
-
-```sh
-cargo run --locked
-```
-
-Open <http://127.0.0.1:3000>, choose **Use X-memory example**, keep distance 3,
-select **Mock**, and click **Compile & run**. Inspect the completed run in Replay,
-Results, Artifacts, and Logs. The mock backend supplies measurement bits without
-maintaining quantum state.
-
-For quantum-state evolution with Stim, stop the service and restart it with the
-optional backend installed:
-
-```sh
 uv sync --frozen --extra stim
 uv run --frozen --extra stim cargo run --locked
 ```
 
-Select **Stim** and run the example. It uses 17 physical qubits and produces
-33 measurement records with raw observable 0.
+## Use
 
-To use your own graph, select **Download BLOG File** in Bloq's editor and upload
-the `.blog` file. Download run artifacts before removing a run or stopping Studio.
+Open <http://127.0.0.1:3000>:
 
-## Scope
+1. **Upload** a `.blog` file exported from the [Bloq editor](https://bloqec.com/editor/).
+2. **Run** by clicking **Compile & run**.
+3. **Inspect** the execution trace in **Replay** and measurement outputs in **Results**.
 
-Each run executes one shot with at most 32 physical qubits, including exporter
-scratch resources. Studio accepts closed graphs supported by the pinned Bloq
-exporter. Decoder feedback, injected noise, external logical patch I/O, qubit
-placement, and routing are not supported. Results contain raw observables,
-without decoder correction. Replay shows completed execution, not live stepping.
+## Limitations
 
-## Learn more
+One shot per run, with up to 32 physical qubits including scratch qubits.
+Only closed graphs supported by the pinned Bloq exporter are accepted.
+Decoder feedback, noise, qubit placement, and routing are not supported.
+Results are uncorrected; replay shows completed runs rather than live execution.
 
-- [Setup](docs/setup.md): tool discovery, backends, and service configuration.
-- [Architecture](docs/architecture.md): compilation and the shared qsbit-sim player.
-- [API reference](docs/api.md): runs, artifacts, and metrics.
-- [Testing](docs/testing.md): development checks and end-to-end verification.
+[Setup details](docs/setup.md) · [Architecture](docs/architecture.md) ·
+[API](docs/api.md) · [Testing](docs/testing.md)
 
-## License
-
-[Apache License 2.0](LICENSE).
+Licensed under [Apache License 2.0](LICENSE).
