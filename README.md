@@ -1,80 +1,66 @@
 # QSBIT Studio
 
-Upload a Bloq `.blog` block graph, compile it into a controller executable, run
-it on qsbit-sim, and inspect the execution trace and measured outputs.
+[![CI](https://github.com/qsbit-org/qsbit-studio/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/qsbit-org/qsbit-studio/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/qsbit-org/qsbit-studio)](LICENSE)
 
-From the repository root, with Rust and the [native tools](docs/setup.md) installed:
+QSBIT Studio is a local web interface for compiling and running quantum-control
+experiments. Upload a Bloq `.blog` graph, compile it with qsbit-compiler, run it
+on qsbit-sim, and inspect the execution trace and measurement results.
+
+[Setup](docs/setup.md) ·
+[Architecture](docs/architecture.md) ·
+[API reference](docs/api.md)
+
+## Build
+
+Install Rust and the [native tools](docs/setup.md#native-tools), then run from
+the repository root on Linux:
 
 ```sh
 git submodule update --init
 cargo build --locked --features exporter
+```
+
+## Run
+
+```sh
 cargo run --locked
 ```
 
-Open <http://127.0.0.1:3000>, choose **Try a distance-3 X-memory example**, select
-**Mock** for a controller-only run, and click **Compile & run**. The execution
-view reports the actual simulator timestamps, instructions, operations, and
-measurement deliveries. Mock bits do not model a quantum state.
+Open <http://127.0.0.1:3000>, choose **Use X-memory example**, keep distance 3,
+select **Mock**, and click **Compile & run**. Inspect the completed run in Replay,
+Results, Artifacts, and Logs. The mock backend supplies measurement bits without
+maintaining quantum state.
 
-For ideal quantum simulation with Stim, install the optional backend in a local
-virtual environment, then launch Studio in that environment:
+For quantum-state evolution with Stim, stop the service and restart it with the
+optional backend installed:
 
 ```sh
 uv sync --frozen --extra stim
 uv run --frozen --extra stim cargo run --locked
 ```
 
-Keep the default **Stim** backend selected. The included X-memory example at
-distance 3 uses 17 physical qubits and produces 33 measurement records and raw
-observable 0. Individual measurement records may vary with the seed.
+Select **Stim** and run the example. It uses 17 physical qubits and produces
+33 measurement records with raw observable 0.
 
-In Bloq's editor, use **Download BLOG File** to export a graph for uploading.
-Studio accepts `.blog` files; Stim circuit files and compiled Bloq IR files are
-not upload formats. Bloq's editor sources remain unmodified.
-
-## Execution player
-
-The player has one source: **qsbit-sim**. This repository pins qsbit-sim as the
-`external/qsbit-sim` submodule and serves its `web/trace-model.js`,
-`trace-player.js`, shared styles, theme handling and self-hosted fonts directly.
-The Studio page supplies the replay bundle and HTML host.
-
-Update the player in qsbit-sim, then advance the Studio submodule and its declared
-revision together. [Architecture](docs/architecture.md) describes the boundary.
+To use your own graph, select **Download BLOG File** in Bloq's editor and upload
+the `.blog` file. Download run artifacts before removing a run or stopping Studio.
 
 ## Scope
 
-The initial preset is an ideal controller with 20 ns gates and 40 ns acquisition,
-one shot per run, and at most 32 physical qubits including exporter scratch
-resources. It supports closed graphs accepted by the pinned Bloq QIR exporter.
-Distance choices are 3, 5, and 7; a graph can still exceed the physical limit.
+Each run executes one shot with at most 32 physical qubits, including exporter
+scratch resources. Studio accepts closed graphs supported by the pinned Bloq
+exporter. Decoder feedback, injected noise, external logical patch I/O, qubit
+placement, and routing are not supported. Results contain raw observables,
+without decoder correction. Replay shows completed execution, not live stepping.
 
-Decoder-dependent control, injected noise, external logical patch I/O, hardware
-placement/routing, and live simulation stepping are unsupported. Playback
-navigates an already completed run. Outputs are measurement records and raw
-observables, without decoder correction or logical error-rate estimates.
+## Learn more
 
-Artifacts are session-scoped. Download the input, QIR, executable, run settings,
-trace, summary, and metrics before removing a run or stopping the service.
-The GitHub repository is public; this command starts a local service.
+- [Setup](docs/setup.md): tool discovery, backends, and service configuration.
+- [Architecture](docs/architecture.md): compilation and the shared qsbit-sim player.
+- [API reference](docs/api.md): runs, artifacts, and metrics.
+- [Testing](docs/testing.md): development checks and end-to-end verification.
 
-## Development
+## License
 
-```sh
-cargo fmt --all --check
-cargo clippy --locked --offline --all-targets --features exporter -- -D warnings
-cargo test --locked --offline --features exporter
-node --check web/studio.js
-python3 tests/check_dependencies.py
-```
-
-Run `cargo fetch --locked` once to provision Rust dependencies before offline
-checks. Optional [integration and browser tests](docs/testing.md) exercise a real
-upload through Bloq, qsbit-compiler, qsbit-sim, and the shared player.
-
-- [Setup and runtime configuration](docs/setup.md)
-- [Architecture and player ownership](docs/architecture.md)
-- [API and metric contracts](docs/api.md)
-- [Testing](docs/testing.md)
-
-Licensed under [Apache-2.0](LICENSE).
+[Apache License 2.0](LICENSE).
