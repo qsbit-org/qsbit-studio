@@ -13,8 +13,12 @@ RUN python3 -m venv /opt/build-tools && /opt/build-tools/bin/pip install uv==0.1
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup.sh \
     && sh /tmp/rustup.sh -y --profile minimal --default-toolchain none
 WORKDIR /src/studio
-COPY . .
-ARG STUDIO_REVISION=unreleased
+COPY Cargo.toml Cargo.lock rust-toolchain.toml Makefile LICENSE toolchain.lock.json ./
+COPY src ./src
+COPY web ./web
+COPY presets ./presets
+COPY examples ./examples
+COPY docker/build-toolchain.sh docker/record-build.py ./docker/
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/root/.cache/pip \
     --mount=type=cache,target=/root/.cargo/registry \
@@ -39,7 +43,8 @@ RUN --mount=type=bind,from=builder,source=/wheels,target=/wheels \
 ENV QSBIT_PYTHON=/opt/qsbit/venv/bin/python \
     PATH="/opt/qsbit/bin:/opt/qsbit/venv/bin:/usr/lib/llvm-21/bin:${PATH}"
 COPY docker/check-runtime.py /opt/qsbit/share/qsbit-studio/check-runtime.py
-RUN dpkg-query -W > /opt/qsbit/share/qsbit-studio/system-packages.txt \
+RUN python -c 'import json, os; from pathlib import Path; p = Path("/opt/qsbit/share/qsbit-studio/toolchain.json"); data = json.loads(p.read_text()); data["studio"]["revision"] = os.environ["STUDIO_REVISION"]; p.write_text(json.dumps(data, indent=2))' \
+    && dpkg-query -W > /opt/qsbit/share/qsbit-studio/system-packages.txt \
     && useradd --create-home --uid 10001 qsbit \
     && install -d -o qsbit -g qsbit /home/qsbit/runs
 USER qsbit

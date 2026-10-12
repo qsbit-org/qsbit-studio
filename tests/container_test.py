@@ -199,6 +199,11 @@ try:
     state = json.loads(docker("inspect", closing))[0]["State"]
     assert state["ExitCode"] == 0, state
     docker("start", closing)
+    restarted = json.loads(docker("inspect", closing))[0]
+    closing_base = (
+        "http://127.0.0.1:"
+        + restarted["NetworkSettings"]["Ports"]["3000/tcp"][0]["HostPort"]
+    )
     wait_for(lambda: api(closing_base, "/api/health"))
     assert api(closing_base, "/api/jobs")["jobs"] == []
     docker(

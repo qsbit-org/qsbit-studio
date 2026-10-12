@@ -13,7 +13,7 @@ for name in ("simulator", "compiler"):
     path = Path("/src") / name
     spec = lock[name]
     subprocess.run(["git", "init", str(path)], check=True)
-    subprocess.run(["git", "-C", str(path), "fetch", "--depth=1", spec["repository"], spec["revision"]], check=True)
+    subprocess.run(["git", "-C", str(path), "fetch", "--no-tags", "--depth=1", spec["repository"], spec["revision"]], check=True)
     subprocess.run(["git", "-C", str(path), "checkout", "--detach", "FETCH_HEAD"], check=True)
     assert subprocess.check_output(["git", "-C", str(path), "rev-parse", "HEAD"], text=True).strip() == spec["revision"]
 PY
