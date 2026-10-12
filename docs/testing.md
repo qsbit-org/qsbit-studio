@@ -73,10 +73,8 @@ download responses. Mobile/dark screenshots and browser diagnostics are written
 under ignored `.local/verification/`.
 
 The baseline CI runs Cargo tests, lint, dependency checks, JavaScript syntax
-checks and the workspace browser tests. For changes to code, assets, presets, tests, or build configuration, the integration
-workflow runs automatically on pull requests and pushes to main. It builds
-the latest simulator and compiler default branches and runs
-numerical and browser integration. Browser installation and native builds are not
+checks and the workspace browser tests. For changes to code, assets, presets, tests, or build configuration, the [Container workflow](containers.md) runs automatically on pull requests and pushes to main.
+It builds the pinned toolchain and runs numerical and browser integration against the final image. Browser installation and native builds are not
 required by the default Rust build.
 
 To verify installed operation, use `make install PREFIX=/path/to/prefix` and run

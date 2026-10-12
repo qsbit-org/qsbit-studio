@@ -67,8 +67,8 @@ copies the chosen bytes into each job's `target.json`. Backend and seed remain
 per-run settings. Explicit device targets use the compiler's normal target format.
 Ideal targets use its `ideal` configuration, including a native reset duration.
 
-Native integration CI builds qsbit-compiler from the latest commit on its remote
-default branch and logs the selected commit. The compiler is not version-pinned.
+Container integration uses the compiler and simulator revisions pinned in
+`toolchain.lock.json`.
 For local development, select a compiler build with `--compiler`. Ideal targets
 require a compiler supporting the `ideal` configuration and a simulator with
 native reset support and the `--installation-info` discovery interface.

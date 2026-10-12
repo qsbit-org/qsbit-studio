@@ -15,7 +15,7 @@ function setUpload(filename, source, bytes) {
   upload = {filename, source};
   $('filename').textContent = filename;
   $('file-size').textContent = `${(bytes / 1024).toFixed(1)} KiB`;
-  $('source-preview').textContent = source;
+  if ($('source-preview').value !== source) $('source-preview').value = source;
   $('source-meta').hidden = false; $('source-details').hidden = false;
   $('file-actions').hidden = false; $('dropzone').hidden = true;
   showError(''); updateRunButton();
@@ -155,6 +155,17 @@ async function poll(id) {
     await new Promise(resolve => setTimeout(resolve, 500));
   }
 }
+$('source-preview').addEventListener('input', () => {
+  uploadGeneration++;
+  const source = $('source-preview').value;
+  const bytes = new TextEncoder().encode(source).length;
+  if (!source.trim() || bytes > 262144) {
+    upload = null;
+    showError(bytes > 262144 ? 'BLOG source must not exceed 256 KiB.' : '');
+    updateRunButton(); return;
+  }
+  setUpload(upload?.filename || 'input.blog', source, bytes);
+});
 $('file-input').addEventListener('change', event => readFile(event.target.files[0]));
 $('dropzone').addEventListener('dragover', event => { event.preventDefault(); $('dropzone').classList.add('dragover'); });
 $('dropzone').addEventListener('dragleave', () => $('dropzone').classList.remove('dragover'));
@@ -162,7 +173,8 @@ $('dropzone').addEventListener('drop', event => { event.preventDefault(); $('dro
 $('replace-file').addEventListener('click', () => $('file-input').click());
 $('clear-file').addEventListener('click', () => {
   uploadGeneration++; upload = null; $('file-input').value = '';
-  $('source-meta').hidden = $('source-details').hidden = $('file-actions').hidden = true;
+  $('source-preview').value = '';
+  $('source-meta').hidden = $('file-actions').hidden = true;
   $('dropzone').hidden = false; showError(''); updateRunButton();
 });
 $('retry-connection').addEventListener('click', () => { if (selectedJob) void poll(selectedJob); });

@@ -68,3 +68,5 @@ footer { height: 32px; display: flex; flex-wrap: wrap; justify-content: space-be
 
 .history-row { display: flex; gap: 6px; }
 .history-row > button:first-child { flex: 1; min-width: 0; }
+
+textarea.source-preview { width: 100%; min-height: 160px; resize: vertical; font: 14px/20px var(--qsbit-font-mono, monospace); }

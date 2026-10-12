@@ -21,14 +21,14 @@
   <main class="workspace">
     <aside class="panel source-panel" aria-labelledby="source-title">
       <h1 id="source-title">Run a block graph</h1>
-      <p class="support">Upload a <code>.blog</code> file exported by Bloq.</p>
+      <p class="support">Upload or paste a <code>.blog</code> graph from Bloq.</p>
       <label class="dropzone" id="dropzone" for="file-input">
         <input id="file-input" type="file" accept=".blog,text/plain">
         <strong>Choose a BLOG file</strong><span>or drop it here · up to 256 KiB</span>
       </label>
       <div class="source-meta" id="source-meta" hidden><strong id="filename"></strong><span id="file-size"></span></div>
       <div id="file-actions" hidden><button id="replace-file" type="button">Replace file</button><button id="clear-file" type="button">Clear</button></div>
-      <details id="source-details" hidden><summary>Source preview</summary><pre id="source-preview" class="source-preview" aria-label="Uploaded BLOG source"></pre></details>
+      <details id="source-details"><summary>Paste or edit BLOG</summary><textarea id="source-preview" class="source-preview" aria-label="BLOG source" rows="8" spellcheck="false"></textarea></details>
       <button type="button" id="example" class="text-button example">Use X-memory example</button>
       <form id="run-form">
         <div class="settings"><label>Code distance<select id="distance"><option value="3">3</option><option value="5">5</option><option value="7">7</option></select></label><label>Seed<input id="seed" type="number" value="1" min="0" max="4294967295" step="1" required></label></div>
@@ -38,6 +38,7 @@
         <button class="primary" id="run" type="submit" disabled>Compile &amp; run →</button>
       </form>
       <p class="preset-note">Timing and capacity follow the selected target.<br>One shot per run</p>
+      <p class="field-note">Download results before stopping Studio. Session history is not restored.</p>
       <p id="upload-error" class="error" role="alert" hidden></p>
       <section class="history" id="history" hidden aria-label="Runs in this session"><h2>Session runs</h2><div id="history-list"></div><button type="button" id="remove-run" hidden>Remove selected run</button></section>
     </aside>

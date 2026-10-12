@@ -1,0 +1,9 @@
+.git
+external
+.local
+.venv
+target
+build*
+__pycache__
+**/__pycache__
+*.egg-info

@@ -7,6 +7,7 @@ import json
 import os
 import queue
 import shutil
+import sys
 import subprocess
 import tempfile
 import threading
@@ -17,6 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--url", help="Test an already running Studio service")
 parser.add_argument("--studio", default="target/debug/qsbit-studio")
 parser.add_argument("--compiler", default="qsbitc")
 parser.add_argument("--simulator", default="qsbit-sim")
@@ -153,24 +155,45 @@ def browser_check():
         page = browser.new_page(viewport={"width": 1440, "height": 1100})
         errors = []
         page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route(
+            "**/*",
+            lambda route: (
+                route.continue_()
+                if route.request.url.startswith(base + "/")
+                else route.abort()
+            ),
+        )
         page.goto(base)
         # Session history is restored after a page reload.
         expect(page.locator("#status-badge")).to_have_text("Completed", timeout=10000)
-        page.locator("#file-input").set_input_files(ROOT / "examples/x-memory.blog")
-        expect(page.locator("#filename")).to_have_text("x-memory.blog")
-        page.locator("#target").select_option("slow-ideal")
-        expect(page.locator("#run")).to_be_enabled()
-        with page.expect_response(
-            lambda response: (
-                response.url.endswith("/api/jobs")
-                and response.request.method == "POST"
-                and response.status == 202
+        for mode in ("upload", "paste", "example"):
+            if mode == "upload":
+                page.locator("#file-input").set_input_files(
+                    ROOT / "examples/x-memory.blog"
+                )
+            elif mode == "paste":
+                page.locator("#clear-file").click()
+                page.locator("#source-details").evaluate(
+                    "(element) => element.open = true"
+                )
+                page.locator("#source-preview").fill(source)
+            else:
+                page.locator("#example").click()
+                expect(page.locator("#filename")).to_have_text("x-memory.blog")
+            expect(page.locator("#run")).to_be_enabled()
+            with page.expect_response(
+                lambda response: (
+                    response.url.endswith("/api/jobs")
+                    and response.request.method == "POST"
+                    and response.status == 202
+                )
+            ) as submission:
+                page.locator("#run").click()
+            submitted = submission.value.json()
+            verify_run(finished(submitted["id"]))
+            expect(page.locator("#status-badge")).to_have_text(
+                "Completed", timeout=180000
             )
-        ) as submission:
-            page.locator("#run").click()
-        submitted = submission.value.json()
-        assert submitted["target"] == "slow-ideal"
-        verify_run(finished(submitted["id"]))
         expect(page.locator("#replay")).to_have_attribute(
             "src", f"/runs/{submitted['id']}/player", timeout=180000
         )
@@ -214,6 +237,52 @@ def browser_check():
         expect(page.locator("#status-badge")).to_have_text("Completed", timeout=10000)
         assert not errors, errors
         browser.close()
+
+
+def check_service():
+    health = api("/api/health")
+    player_root = Path(health["player_root"])
+    if args.installed:
+        assert health["installation"]["installed"]
+    for asset in (
+        "trace-model.js",
+        "trace-player.js",
+        "trace-player.css",
+        "qsbit-tokens.css",
+        "qsbit-fonts.css",
+        "qsbit-base.css",
+        "qsbit-theme.js",
+        "fonts/source-sans-3.woff2",
+        "fonts/source-sans-3-italic.woff2",
+        "fonts/source-code-pro.woff2",
+    ):
+        payload, _ = http(f"/player/{asset}")
+        assert payload
+        if not args.url:
+            assert payload == (player_root / asset).read_bytes()
+    # Failed inputs cannot silently become a gallery example's run.
+    for invalid_source, distance, stage in [
+        ("BLOG 1.0\nthis is not a graph", 3, "exporting"),
+        (source, 5, "exporting"),
+    ]:
+        report = finished(submit(invalid_source, distance)["id"])
+        assert report["stage"] == "failed" and report["failed_stage"] == stage, report
+        assert not report["replay_ready"]
+        if distance == 5:
+            assert "requires 49 qubits; target supports 32" in report["error"], report
+            assert "compile.log" not in report["artifacts"]
+        api(f"/api/jobs/{report['id']}", method="DELETE")
+
+
+source = (ROOT / "examples/x-memory.blog").read_text()
+if args.url:
+    base = args.url.rstrip("/")
+    check_service()
+    verify_run(finished(submit(source)["id"]))
+    if args.browser:
+        browser_check()
+    print("Verified container BLOG → QIR → ELF → Stim → shared replay")
+    sys.exit(0)
 
 
 slow_target = json.loads((ROOT / "presets/studio-ideal-v1.json").read_text())
@@ -277,36 +346,7 @@ try:
     assert line.startswith("QSBIT Studio: http://"), line
     base = line.split()[-1]
     source = (ROOT / "examples/x-memory.blog").read_text()
-    health = api("/api/health")
-    player_root = Path(health["player_root"])
-    if args.installed:
-        assert health["installation"]["installed"]
-    for asset in (
-        "trace-model.js",
-        "trace-player.js",
-        "trace-player.css",
-        "qsbit-tokens.css",
-        "qsbit-fonts.css",
-        "qsbit-base.css",
-        "qsbit-theme.js",
-        "fonts/source-sans-3.woff2",
-        "fonts/source-sans-3-italic.woff2",
-        "fonts/source-code-pro.woff2",
-    ):
-        payload, _ = http(f"/player/{asset}")
-        assert payload == (player_root / asset).read_bytes()
-    # Failed inputs cannot silently become a gallery example's run.
-    for invalid_source, distance, stage in [
-        ("BLOG 1.0\nthis is not a graph", 3, "exporting"),
-        (source, 5, "exporting"),
-    ]:
-        report = finished(submit(invalid_source, distance)["id"])
-        assert report["stage"] == "failed" and report["failed_stage"] == stage, report
-        assert not report["replay_ready"]
-        if distance == 5:
-            assert "requires 49 qubits; target supports 32" in report["error"], report
-            assert "compile.log" not in report["artifacts"]
-        api(f"/api/jobs/{report['id']}", method="DELETE")
+    check_service()
     alternate = finished(submit(source, target="slow-ideal")["id"])
     alternate_id = verify_run(alternate)
     assert alternate["target"] == "slow-ideal"

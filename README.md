@@ -10,31 +10,24 @@ run it, and inspect the results.
 > [!NOTE]
 > A hosted web version of QSBIT Studio is planned.
 
-## Build
-
-On Linux, install Rust, LLVM 21 tools, [qsbit-compiler](https://github.com/qsbit-org/qsbit-compiler#build)
-and [qsbit-sim with Stim support](https://qsbit-org.github.io/qsbit-sim/building.html#install-with-a-python-backend).
-Put `qsbitc` and `qsbit-sim` on PATH. With uv installed, run from the repository root:
+## Run with Docker
 
 ```sh
-uv tool install "git+https://github.com/qsbit-org/qsbit-compiler"
-make install PREFIX="$HOME/.local"
-export PATH="$HOME/.local/bin:$PATH"
+docker run --rm --init --name qsbit-studio \
+  -p 127.0.0.1:3000:3000 ghcr.io/qsbit-org/qsbit-studio:edge
 ```
 
-## Run
+Open <http://127.0.0.1:3000>, upload or paste a [BLOG graph](https://bloqec.com/editor/),
+and click **Compile & run**. Inspect **Results**, **Replay**, and **Logs**.
 
-Activate a compatible Python environment with `qsbit-sim-backends` and Stim installed:
+The image includes the compiler, simulator, and Stim. No other installation is required.
+Download artifacts before stopping the container; session history is not restored.
 
-```sh
-source /path/to/venv/bin/activate
-qsbit-studio
-```
+`edge` follows tested main builds. Formal releases publish a version tag and `latest`.
+For reproducible runs, use an image digest. The image supports Linux AMD64.
 
-Open <http://127.0.0.1:3000>, upload a `.blog` file from the
-[Bloq editor](https://bloqec.com/editor/), and click **Compile & run**.
-Inspect execution in **Replay** and measurements in **Results**.
-See [setup details](docs/setup.md) for Python compatibility and configuration.
+For source installation, see [Setup](docs/setup.md). For image builds and publication,
+see [Containers](docs/containers.md).
 
 ## Limitations
 

@@ -1,7 +1,16 @@
 {
-  "schema": 1,
+  "schema": 2,
   "bloq": {
     "repository": "https://github.com/Zhaoyilunnn/bloq.git",
     "revision": "0a4962595f32f5e5c63ce9cce224082c87632684"
+  },
+  "base_image": "ubuntu:26.04@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7",
+  "simulator": {
+    "repository": "https://github.com/qsbit-org/qsbit-sim.git",
+    "revision": "5a3d75b0399ccb1c765202af6ac97bc46e5d99cd"
+  },
+  "compiler": {
+    "repository": "https://github.com/qsbit-org/qsbit-compiler.git",
+    "revision": "6e95048123a49511be9cfb21752ddb6267136e20"
   }
 }
