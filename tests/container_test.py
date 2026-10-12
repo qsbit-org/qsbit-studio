@@ -48,34 +48,39 @@ def wait_for(check, seconds=60):
     raise AssertionError("Timed out waiting for container condition")
 
 
-def start(suffix, timeout=120):
-    identifier = name + suffix
-    docker(
-        "run",
-        "-d",
-        "--init",
-        "--name",
-        identifier,
-        "--network",
-        name,
-        "-p",
-        "127.0.0.1::3000",
-        args.image,
-        "--listen",
-        "0.0.0.0:3000",
-        "--allow-remote",
-        "--work-dir",
-        "/home/qsbit/runs",
-        "--max-running",
-        "1",
-        "--stage-timeout-seconds",
-        str(timeout),
-    )
-    containers.append(identifier)
+def address(identifier, offline):
     info = json.loads(docker("inspect", identifier))[0]
     assert not info["Mounts"]
-    port = info["NetworkSettings"]["Ports"]["3000/tcp"][0]["HostPort"]
-    base = "http://127.0.0.1:" + port
+    if offline:
+        return (
+            "http://" + info["NetworkSettings"]["Networks"][name]["IPAddress"] + ":3000"
+        )
+    binding = info["NetworkSettings"]["Ports"]["3000/tcp"][0]
+    assert binding["HostIp"] == "127.0.0.1"
+    return "http://127.0.0.1:" + binding["HostPort"]
+
+
+def start(suffix, timeout=120, offline=True):
+    identifier = name + suffix
+    network = ["--network", name] if offline else ["-p", "127.0.0.1::3000"]
+    settings = (
+        [
+            "--listen",
+            "0.0.0.0:3000",
+            "--allow-remote",
+            "--work-dir",
+            "/home/qsbit/runs",
+            "--max-running",
+            "1",
+            "--stage-timeout-seconds",
+            str(timeout),
+        ]
+        if offline
+        else []
+    )
+    docker("run", "-d", "--init", "--name", identifier, *network, args.image, *settings)
+    containers.append(identifier)
+    base = address(identifier, offline)
     wait_for(lambda: api(base, "/api/health"))
     return identifier, base
 
@@ -131,6 +136,7 @@ raise SystemExit(1)
 
 try:
     docker("network", "create", "--internal", name)
+    start("-published", offline=False)
     identifier, base = start("-normal")
     docker(
         "exec", identifier, "python", "/opt/qsbit/share/qsbit-studio/check-runtime.py"
@@ -199,11 +205,7 @@ try:
     state = json.loads(docker("inspect", closing))[0]["State"]
     assert state["ExitCode"] == 0, state
     docker("start", closing)
-    restarted = json.loads(docker("inspect", closing))[0]
-    closing_base = (
-        "http://127.0.0.1:"
-        + restarted["NetworkSettings"]["Ports"]["3000/tcp"][0]["HostPort"]
-    )
+    closing_base = address(closing, offline=True)
     wait_for(lambda: api(closing_base, "/api/health"))
     assert api(closing_base, "/api/jobs")["jobs"] == []
     docker(

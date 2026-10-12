@@ -11,7 +11,8 @@ uv run --no-sync playwright install --with-deps chromium
 uv run --no-sync python tests/container_test.py --image qsbit-studio:local
 ```
 
-The test runs the final image on an internal Docker network. It verifies the
+Run the test on a local Linux Docker Engine. It checks loopback port publishing,
+then runs the final image on an internal Docker network using its bridge address. It verifies the
 installed tools, Stim results, upload, text input, example selection, replay,
 downloads, invalid inputs, cancellation, timeouts, and shutdown cleanup.
 
