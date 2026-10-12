@@ -30,9 +30,23 @@ cmake --preset clang-ninja-release -DBUILD_TESTING=OFF -DQSBIT_BUILD_EXAMPLES=OF
 cmake --build --preset clang-ninja-release --parallel "$jobs"
 cmake --install build-clang-release --prefix "$prefix"
 uv export --frozen --extra stim --no-dev --no-emit-project --format requirements-txt > /tmp/runtime-requirements.txt
-/opt/build-tools/bin/pip download --require-hashes --only-binary=:all: \
-    -r /tmp/runtime-requirements.txt --dest "$wheels"
 uv pip install --python .venv/bin/python setuptools==80.9.0 wheel==0.45.1
+if [ "$(uname -sm)" = "Linux aarch64" ]; then
+    downloads="$(mktemp -d)"
+    # Only Stim may use a source archive; its hash comes from the simulator lockfile.
+    /opt/build-tools/bin/pip --python .venv/bin/python download \
+        --require-hashes --only-binary=:all: --no-binary=stim --no-build-isolation \
+        -r /tmp/runtime-requirements.txt --dest "$downloads"
+    cp "$downloads"/*.whl "$wheels/"
+    stim_sources=("$downloads"/stim-*.tar.gz)
+    test "${#stim_sources[@]}" -eq 1 && test -f "${stim_sources[0]}"
+    /opt/build-tools/bin/pip --python .venv/bin/python wheel \
+        --no-index --no-deps --no-build-isolation \
+        --wheel-dir "$wheels" "${stim_sources[0]}"
+else
+    /opt/build-tools/bin/pip download --require-hashes --only-binary=:all: \
+        -r /tmp/runtime-requirements.txt --dest "$wheels"
+fi
 uv build --wheel --no-build-isolation --python .venv/bin/python --out-dir "$wheels"
 cd /src/compiler
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++-21 \

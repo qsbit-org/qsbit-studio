@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import stim
@@ -18,6 +19,8 @@ assert Path(sys.prefix) == Path("/opt/qsbit/venv")
 root = Path("/opt/qsbit/share/qsbit-studio")
 lock = json.loads((root / "toolchain.json").read_text())
 assert list(sys.version_info[:3]) == lock["python"]
+packages = tomllib.loads((root / "simulator-uv.lock").read_text())["package"]
+assert stim.__version__ == next(p["version"] for p in packages if p["name"] == "stim")
 for command in (
     "qsbit-studio",
     "qsbit-blog-export",
