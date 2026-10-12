@@ -13,8 +13,18 @@ concurrency:
   cancel-in-progress: true
 jobs:
   verify:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
@@ -24,11 +34,15 @@ jobs:
         with:
           context: .
           load: true
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           tags: qsbit-studio:test
           build-args: STUDIO_REVISION=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+      - name: Check image architecture
+        env:
+          EXPECTED_PLATFORM: ${{ matrix.platform }}
+        run: test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' qsbit-studio:test)" = "$EXPECTED_PLATFORM"
       - name: Prepare host test tools
         run: |
           python3 -m venv .venv
@@ -45,7 +59,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: github.event_name == 'push' || github.event_name == 'release'
         with:
-          name: tested-image
+          name: tested-image-${{ matrix.arch }}
           path: |
             image.tar
             tested-image-id
@@ -54,7 +68,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: container-verification
+          name: container-verification-${{ matrix.arch }}
           path: .local/verification/
   publish:
     needs: verify
@@ -64,14 +78,11 @@ jobs:
       contents: read
       packages: write
     steps:
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: tested-image
-      - name: Load verified image
-        run: |
-          docker load --input image.tar
-          test "$(docker image inspect --format '{{.Id}}' qsbit-studio:test)" = "$(cat tested-image-id)"
-      - name: Publish verified image
+          pattern: tested-image-*
+      - name: Publish verified images and manifest
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_USER: ${{ github.actor }}
@@ -79,7 +90,8 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           registry=ghcr.io/qsbit-org/qsbit-studio
-          tags=("sha-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}")
+          build_tag="sha-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          tags=()
           if [ "$EVENT_NAME" = release ]; then
             [[ "$RELEASE_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]
             tags+=("$RELEASE_TAG" latest)
@@ -87,12 +99,31 @@ jobs:
             tags+=(edge)
           fi
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-          for tag in "${tags[@]}"; do
-            docker tag qsbit-studio:test "$registry:$tag"
-            docker push "$registry:$tag"
+          digests=()
+          for arch in amd64 arm64; do
+            docker load --input "tested-image-$arch/image.tar"
+            test "$(docker image inspect --format '{{.Id}}' qsbit-studio:test)" = "$(cat "tested-image-$arch/tested-image-id")"
+            test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' qsbit-studio:test)" = "linux/$arch"
+            image="$registry:$build_tag-$arch"
+            docker tag qsbit-studio:test "$image"
+            docker push "$image"
+            digests+=("$(docker image inspect --format '{{index .RepoDigests 0}}' "$image")")
           done
-          digest="$(docker image inspect --format '{{index .RepoDigests 0}}' qsbit-studio:test)"
-          echo "Published $digest" >> "$GITHUB_STEP_SUMMARY"
+          docker buildx imagetools create --tag "$registry:$build_tag" "${digests[@]}"
+          digest="$(docker buildx imagetools inspect "$registry:$build_tag" --format '{{.Manifest.Digest}}')"
+          reference="$registry@$digest"
+          docker buildx imagetools inspect "$reference" --raw > manifest.json
+          jq -e --arg amd64 "${digests[0]#*@}" --arg arm64 "${digests[1]#*@}" '
+            (.manifests | length) == 2 and
+            any(.manifests[]; .platform.os == "linux" and .platform.architecture == "amd64" and .digest == $amd64) and
+            any(.manifests[]; .platform.os == "linux" and .platform.architecture == "arm64" and .digest == $arm64)
+          ' manifest.json
+          for tag in "${tags[@]}"; do
+            docker buildx imagetools create --tag "$registry:$tag" "$reference"
+          done
+          echo "Published $reference (linux/amd64, linux/arm64)" >> "$GITHUB_STEP_SUMMARY"
           docker logout ghcr.io
           anonymous_config="$(mktemp -d)"
-          DOCKER_CONFIG="$anonymous_config" docker pull "$digest"
+          for arch in amd64 arm64; do
+            DOCKER_CONFIG="$anonymous_config" docker pull --platform "linux/$arch" "$reference"
+          done

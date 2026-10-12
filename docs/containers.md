@@ -32,15 +32,17 @@ installed distributions; system package licenses are under `/usr/share/doc`.
 
 ## Publication
 
-The Container workflow builds and tests Linux AMD64 images on pull requests.
+The Container workflow builds and tests Linux AMD64 and ARM64 images on native runners.
 Successful main builds publish `edge` and a unique commit-and-run tag.
 A published, non-prerelease GitHub release with a semantic version tag publishes
 that version and `latest`. Manual runs validate without publishing.
 
-The publication job loads the exact tested image and checks its image ID before
-pushing. It then logs out and verifies anonymous retrieval by digest.
+After both architectures pass, the publication job loads the tested images,
+checks their IDs and architectures, and pushes them. It combines their immutable
+digests into a multi-platform manifest and verifies anonymous retrieval for both architectures.
 On first publication, an organization package administrator must set the GHCR
 package visibility to **Public**. Anonymous verification fails until this is done.
 
-Update component revisions through a pull request. ARM64 images require their
-own build and final-image tests before publication.
+Update component revisions through a pull request. Apple Silicon acceptance
+requires a separate Docker Desktop check: run without `--platform`, confirm the
+container uses ARM64, submit a BLOG experiment, and check its results and replay.

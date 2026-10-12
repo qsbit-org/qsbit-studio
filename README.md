@@ -21,7 +21,7 @@ Open <http://127.0.0.1:3000>, upload or paste a [BLOG graph](https://bloqec.com/
 and click **Compile & run**. Inspect **Results**, **Replay**, and **Logs**.
 
 `edge` follows tested main builds. Formal releases publish a version tag and `latest`.
-For reproducible runs, use an image digest. The image supports Linux AMD64.
+For reproducible runs, use an image digest. The image supports Linux AMD64 and ARM64.
 
 For source installation, see [Setup](docs/setup.md). For image builds and publication,
 see [Containers](docs/containers.md).
