@@ -129,9 +129,13 @@ def check(base):
                 if disconnected:
                     route.abort()
                 else:
-                    route.fulfill(
-                        json=next(r for r in records if r["id"] == identifier)
-                    )
+                    record = next((r for r in records if r["id"] == identifier), None)
+                    if record is None:
+                        route.fulfill(
+                            status=404, json={"error": {"message": "Run not found"}}
+                        )
+                    else:
+                        route.fulfill(json=record)
 
         page.route("**/api/jobs**", handle)
         # Serve the real shared player without requiring a native job for layout tests.
