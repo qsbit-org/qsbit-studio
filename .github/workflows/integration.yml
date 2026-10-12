@@ -14,64 +14,130 @@ jobs:
     container: ubuntu:26.04
     timeout-minutes: 45
     env:
-      QSBIT_PYTHON: /tmp/qsbit-toolchain/lib/qsbit-sim/venv/bin/python
+      SYSTEM_PYTHON: /usr/bin/python3
+      BUILD_TOOLS_VENV: /tmp/qsbit-build-tools
+      SIM_SOURCE: /tmp/qsbit-sim
+      COMPILER_SOURCE: /tmp/qsbit-compiler
+      TOOLCHAIN_PREFIX: /tmp/qsbit-toolchain
+      RUNTIME_REQUIREMENTS: /tmp/qsbit-runtime-requirements.txt
+      UV_NO_MANAGED_PYTHON: "true"
+      UV_PYTHON_DOWNLOADS: "never"
     steps:
       - name: Install native tools
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            ca-certificates curl git build-essential cmake ninja-build python3 python3-venv \
+            ca-certificates curl git build-essential cmake ninja-build python3 python3-venv python3-dev \
             clang clang-21 llvm-21-dev llvm-21-tools lld-21 pkg-config
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Define derived paths
+        run: |
+          echo "SIM_RUNTIME_VENV=$TOOLCHAIN_PREFIX/lib/qsbit-sim/venv" >> "$GITHUB_ENV"
+          echo "QSBIT_PYTHON=$TOOLCHAIN_PREFIX/lib/qsbit-sim/venv/bin/python" >> "$GITHUB_ENV"
+          echo "STUDIO_VENV=$GITHUB_WORKSPACE/.venv" >> "$GITHUB_ENV"
       - name: Install Rust and optional Python tools
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup.sh
           sh /tmp/rustup.sh -y --profile minimal --default-toolchain none
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-          python3 -m venv /tmp/qsbit-build-tools
-          /tmp/qsbit-build-tools/bin/python -m pip install uv==0.12.7
-          echo "/tmp/qsbit-build-tools/bin" >> "$GITHUB_PATH"
-          /tmp/qsbit-build-tools/bin/uv sync --frozen --group integration --group browser
+          "$SYSTEM_PYTHON" -m venv "$BUILD_TOOLS_VENV"
+          "$BUILD_TOOLS_VENV/bin/python" -m pip install uv==0.12.7
+          echo "$BUILD_TOOLS_VENV/bin" >> "$GITHUB_PATH"
+          "$BUILD_TOOLS_VENV/bin/uv" sync --python "$SYSTEM_PYTHON" --no-managed-python --frozen --group integration --group browser
       - name: Provision the latest simulator from its default branch
         run: |
-          git clone --depth 1 https://github.com/qsbit-org/qsbit-sim.git /tmp/qsbit-sim
-          git -C /tmp/qsbit-sim rev-parse HEAD
-          uv sync --project /tmp/qsbit-sim --frozen --group build --extra stim
-          uv export --project /tmp/qsbit-sim --frozen --extra stim --no-dev --no-emit-project \
-            --format requirements-txt > /tmp/qsbit-runtime-requirements.txt
-          uv venv --python /tmp/qsbit-sim/.venv/bin/python /tmp/qsbit-toolchain/lib/qsbit-sim/venv
-          uv pip sync --python /tmp/qsbit-toolchain/lib/qsbit-sim/venv/bin/python /tmp/qsbit-runtime-requirements.txt
-          uv pip install --python /tmp/qsbit-toolchain/lib/qsbit-sim/venv/bin/python --no-deps /tmp/qsbit-sim
+          git clone --depth 1 https://github.com/qsbit-org/qsbit-sim.git "$SIM_SOURCE"
+          git -C "$SIM_SOURCE" rev-parse HEAD
+          uv sync --project "$SIM_SOURCE" --python "$SYSTEM_PYTHON" --no-managed-python --frozen --group build --extra stim
+          uv export --project "$SIM_SOURCE" --frozen --extra stim --no-dev --no-emit-project \
+            --format requirements-txt > "$RUNTIME_REQUIREMENTS"
+          uv venv --python "$SYSTEM_PYTHON" --no-managed-python "$SIM_RUNTIME_VENV"
+          uv pip sync --python "$QSBIT_PYTHON" "$RUNTIME_REQUIREMENTS"
+          uv pip install --python "$QSBIT_PYTHON" --no-deps "$SIM_SOURCE"
+      - name: Verify system Python toolchain
+        run: |
+          "$SYSTEM_PYTHON" - <<'PYTHON'
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+
+          probe = """
+          import json, sys, sysconfig
+          print(json.dumps({
+              "base_executable": sys._base_executable,
+              "base_prefix": sys.base_prefix,
+              "version": list(sys.version_info[:3]),
+              "include": sysconfig.get_path("include"),
+              "libdir": sysconfig.get_config_var("LIBDIR"),
+              "ldlibrary": sysconfig.get_config_var("LDLIBRARY"),
+          }))
+          """
+          interpreters = [
+              os.environ["SYSTEM_PYTHON"],
+              os.environ["BUILD_TOOLS_VENV"] + "/bin/python",
+              os.environ["STUDIO_VENV"] + "/bin/python",
+              os.environ["SIM_SOURCE"] + "/.venv/bin/python",
+              os.environ["QSBIT_PYTHON"],
+          ]
+          system = None
+          for executable in interpreters:
+              info = json.loads(subprocess.check_output(
+                  [executable, "-c", probe], text=True
+              ))
+              print(f"{executable}: {json.dumps(info)}", flush=True)
+              if system is None:
+                  system = info
+              assert Path(info["base_executable"]).resolve() == Path(
+                  system["base_executable"]
+              ).resolve(), f"{executable}: unexpected base interpreter"
+              for key in ("base_prefix", "version", "include", "libdir", "ldlibrary"):
+                  assert info[key] == system[key], f"{executable}: mismatched {key}"
+              assert info["include"] and info["libdir"] and info["ldlibrary"], (
+                  f"{executable}: missing Python development configuration"
+              )
+              header = Path(info["include"]) / "Python.h"
+              library = Path(info["libdir"]) / info["ldlibrary"]
+              assert header.is_file(), f"Missing header: {header}"
+              assert library.is_file(), f"Missing library: {library}"
+
+          with open(os.environ["GITHUB_ENV"], "a") as environment:
+              environment.write(f'PYTHON_INCLUDE_DIR={system["include"]}\n')
+              environment.write(
+                  f'PYTHON_LIBRARY={Path(system["libdir"]) / system["ldlibrary"]}\n'
+              )
+          PYTHON
       - name: Build and install the matching simulator
-        working-directory: /tmp/qsbit-sim
+        working-directory: ${{ env.SIM_SOURCE }}
         run: |
           .venv/bin/conan config install conan/config
           .venv/bin/conan install . -pr:a=conan/profiles/clang --build=missing -c tools.build:jobs=2
           cmake --preset clang-ninja -DBUILD_TESTING=OFF -DQSBIT_BUILD_EXAMPLES=OFF \
-            -DQSBIT_PYTHON_BACKENDS=ON -DPython3_EXECUTABLE=/tmp/qsbit-toolchain/lib/qsbit-sim/venv/bin/python
+            -DQSBIT_PYTHON_BACKENDS=ON -DPython3_EXECUTABLE="$QSBIT_PYTHON" \
+            -DPython3_INCLUDE_DIR="$PYTHON_INCLUDE_DIR" -DPython3_LIBRARY="$PYTHON_LIBRARY"
           cmake --build --preset clang-ninja --parallel 2
-          cmake --install build-clang --prefix /tmp/qsbit-toolchain
-          /tmp/qsbit-toolchain/bin/qsbit-sim --installation-info
+          cmake --install build-clang --prefix "$TOOLCHAIN_PREFIX"
+          "$TOOLCHAIN_PREFIX/bin/qsbit-sim" --installation-info
       - name: Build the latest compiler from its default branch
         run: |
-          git clone --depth 1 https://github.com/qsbit-org/qsbit-compiler.git /tmp/qsbit-compiler
-          git -C /tmp/qsbit-compiler rev-parse HEAD
-          cmake -S /tmp/qsbit-compiler -B /tmp/qsbit-compiler/build -G Ninja \
+          git clone --depth 1 https://github.com/qsbit-org/qsbit-compiler.git "$COMPILER_SOURCE"
+          git -C "$COMPILER_SOURCE" rev-parse HEAD
+          cmake -S "$COMPILER_SOURCE" -B "$COMPILER_SOURCE/build" -G Ninja \
             -DCMAKE_CXX_COMPILER=clang++-21 -DBUILD_TESTING=OFF \
-            -DCMAKE_PREFIX_PATH=/tmp/qsbit-toolchain
-          cmake --build /tmp/qsbit-compiler/build --parallel 2
-          cmake --install /tmp/qsbit-compiler/build --prefix /tmp/qsbit-toolchain
-          uv pip install --python .venv/bin/python /tmp/qsbit-compiler
-          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+            -DCMAKE_PREFIX_PATH="$TOOLCHAIN_PREFIX"
+          cmake --build "$COMPILER_SOURCE/build" --parallel 2
+          cmake --install "$COMPILER_SOURCE/build" --prefix "$TOOLCHAIN_PREFIX"
+          uv pip install --python "$STUDIO_VENV/bin/python" "$COMPILER_SOURCE"
+          echo "$STUDIO_VENV/bin" >> "$GITHUB_PATH"
       - name: Build Studio
-        run: make install PREFIX=/tmp/qsbit-toolchain
+        run: make install PREFIX="$TOOLCHAIN_PREFIX"
       - name: Install browser and exercise real uploads
         run: |
-          .venv/bin/playwright install --with-deps chromium
-          .venv/bin/python tests/installed_startup.py --prefix /tmp/qsbit-toolchain
-          .venv/bin/python tests/end_to_end.py --studio /tmp/qsbit-toolchain/bin/qsbit-studio \
-            --compiler /tmp/qsbit-toolchain/bin/qsbitc \
-            --simulator /tmp/qsbit-toolchain/bin/qsbit-sim --installed --polluted-environment --browser
+          "$STUDIO_VENV/bin/playwright" install --with-deps chromium
+          "$STUDIO_VENV/bin/python" tests/installed_startup.py --prefix "$TOOLCHAIN_PREFIX"
+          "$STUDIO_VENV/bin/python" tests/end_to_end.py --studio "$TOOLCHAIN_PREFIX/bin/qsbit-studio" \
+            --compiler "$TOOLCHAIN_PREFIX/bin/qsbitc" \
+            --simulator "$TOOLCHAIN_PREFIX/bin/qsbit-sim" --installed --polluted-environment --browser
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
