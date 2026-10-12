@@ -40,9 +40,17 @@ if [ "$(uname -sm)" = "Linux aarch64" ]; then
     cp "$downloads"/*.whl "$wheels/"
     stim_sources=("$downloads"/stim-*.tar.gz)
     test "${#stim_sources[@]}" -eq 1 && test -f "${stim_sources[0]}"
+    test "$(basename "${stim_sources[0]}")" = stim-1.16.0.tar.gz
+    stim_source="$(mktemp -d)"
+    tar -xzf "${stim_sources[0]}" --strip-components=1 -C "$stim_source"
+    git -C "$stim_source" apply --check "$studio/docker/patches/stim-1.16.0.patch"
+    git -C "$stim_source" apply "$studio/docker/patches/stim-1.16.0.patch"
+    .venv/bin/python -c 'import pybind11; print("Building Stim with pybind11", pybind11.__version__)'
     /opt/build-tools/bin/pip --python .venv/bin/python wheel \
         --no-index --no-deps --no-build-isolation \
-        --wheel-dir "$wheels" "${stim_sources[0]}"
+        --wheel-dir "$wheels" "$stim_source"
+    install -Dm644 "$studio/docker/patches/stim-1.16.0.patch" \
+        "$prefix/share/qsbit-studio/patches/stim-1.16.0.patch"
 else
     /opt/build-tools/bin/pip download --require-hashes --only-binary=:all: \
         -r /tmp/runtime-requirements.txt --dest "$wheels"

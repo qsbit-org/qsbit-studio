@@ -6,10 +6,10 @@ import re
 import shutil
 import subprocess
 import sys
-import tomllib
 from pathlib import Path
 
 import stim
+import tomllib
 
 assert os.getuid() != 0
 assert not Path("/src").exists()
@@ -39,6 +39,11 @@ assert lock["simulator"]["revision"].startswith(info["revision"]), info
 assert info["python"] == os.environ["QSBIT_PYTHON"]
 assert Path(info["web_root"]).is_dir()
 assert stim.Circuit("X 0\nM 0").compile_sampler().sample(1)[0, 0]
+simulator = stim.TableauSimulator()
+assert simulator.measure_kickback(0) == (False, None)
+simulator.h(0)
+result, kickback = simulator.measure_kickback(0)
+assert isinstance(result, bool) and kickback == stim.PauliString("X")
 for command in ("qsbit-studio", "qsbit-blog-export", "qsbitc", "qsbit-sim-native"):
     path = Path("/opt/qsbit/bin") / command
     if command == "qsbit-sim-native":

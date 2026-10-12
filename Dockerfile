@@ -19,6 +19,7 @@ COPY web ./web
 COPY presets ./presets
 COPY examples ./examples
 COPY docker/build-toolchain.sh docker/record-build.py ./docker/
+COPY docker/patches ./docker/patches
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/root/.cache/pip \
     --mount=type=cache,target=/root/.cargo/registry \
