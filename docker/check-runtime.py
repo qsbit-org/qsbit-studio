@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -30,7 +31,8 @@ for command in ("qsbit-run", "qsbit-validate"):
     subprocess.run([command, "--help"], check=True, stdout=subprocess.DEVNULL)
 info = json.loads(subprocess.check_output(["qsbit-sim", "--installation-info"]))
 assert info["installed"] and info["backend_api"] == 4
-assert info["revision"] == lock["simulator"]["revision"]
+assert re.fullmatch(r"[a-f0-9]{7,40}", info["revision"]), info
+assert lock["simulator"]["revision"].startswith(info["revision"]), info
 assert info["python"] == os.environ["QSBIT_PYTHON"]
 assert Path(info["web_root"]).is_dir()
 assert stim.Circuit("X 0\nM 0").compile_sampler().sample(1)[0, 0]
