@@ -7,8 +7,8 @@ import json
 import os
 import queue
 import shutil
-import sys
 import subprocess
+import sys
 import tempfile
 import threading
 import time

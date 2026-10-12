@@ -44,5 +44,5 @@ cd "$studio"
 make install PREFIX="$prefix"
 install -d "$prefix/share/qsbit-studio/examples"
 install -m 644 examples/*.blog "$prefix/share/qsbit-studio/examples/"
-cargo metadata --locked --format-version=1 > /tmp/cargo-metadata.json
+cargo metadata --locked --features exporter --format-version=1 > /tmp/cargo-metadata.json
 python3 docker/record-build.py "$prefix" "${STUDIO_REVISION:-unreleased}"

@@ -27,7 +27,9 @@ ARG STUDIO_REVISION=unreleased
 LABEL org.opencontainers.image.source="https://github.com/qsbit-org/qsbit-studio" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.revision="${STUDIO_REVISION}"
-COPY --from=builder /opt/qsbit /opt/qsbit
+COPY --from=builder /opt/qsbit/bin /opt/qsbit/bin
+COPY --from=builder /opt/qsbit/lib/qsbit-sim /opt/qsbit/lib/qsbit-sim
+COPY --from=builder /opt/qsbit/share /opt/qsbit/share
 RUN --mount=type=bind,from=builder,source=/wheels,target=/wheels \
     python3 -m venv /opt/qsbit/venv \
     && /opt/qsbit/venv/bin/pip install --no-index --find-links=/wheels \

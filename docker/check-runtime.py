@@ -2,12 +2,17 @@
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+
 import stim
 
 assert os.getuid() != 0
+assert not Path("/src").exists()
+for command in ("gcc", "g++", "clang", "cargo", "cmake", "conan"):
+    assert shutil.which(command) is None, command
 assert Path(sys.prefix) == Path("/opt/qsbit/venv")
 root = Path("/opt/qsbit/share/qsbit-studio")
 lock = json.loads((root / "toolchain.json").read_text())

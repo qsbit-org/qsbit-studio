@@ -214,7 +214,7 @@ try:
 finally:
     for identifier in containers:
         result = subprocess.run(
-            ["docker", "logs", identifier], capture_output=True, text=True
+            ["docker", "logs", identifier], capture_output=True, text=True, check=False
         )
         (output / (identifier + ".log")).write_text(result.stdout + result.stderr)
         subprocess.run(["docker", "rm", "-f", identifier], check=False)

@@ -3,7 +3,8 @@ external
 .local
 .venv
 target
-build*
+build/
+build-*/
 __pycache__
 **/__pycache__
 *.egg-info

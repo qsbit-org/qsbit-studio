@@ -176,6 +176,15 @@ def check(base):
         page.click("#clear-file")
         expect(page.locator("#dropzone")).to_be_visible()
 
+        upload("slow.blog")
+        page.locator("#source-details").evaluate("(element) => element.open = true")
+        page.locator("#source-preview").fill("BLOG 1.0\n# edited")
+        page.evaluate("window.finishRead()")
+        expect(page.locator("#source-preview")).to_have_value("BLOG 1.0\n# edited")
+        expect(page.locator("#filename")).to_have_text("input.blog")
+        page.locator("#source-preview").fill("")
+        expect(page.locator("#run")).to_be_disabled()
+
         records[:] = [report("a", "simulating")]
         page.reload()
         expect(page.locator("#status-badge")).to_have_text("Running")
