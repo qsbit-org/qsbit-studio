@@ -10,7 +10,8 @@ trace interpretation.
 `qsbit-blog-export` reads UTF-8 BLOG using Bloq's public Rust APIs. It compiles the
 graph into Bloq IR, lowers it into the typed Bloq VM program, and emits verified
 Adaptive QIR. The adapter rejects empty graphs, decoder-dependent tasks,
-and unsupported exporter semantics.
+unsupported exporter semantics, and programs exceeding the selected target’s
+qubit limit before emitting QIR.
 It never replaces the uploaded graph with a built-in example.
 
 The adapter records terminal measurement slots and top-level raw observables in
@@ -30,10 +31,16 @@ from validated QIR. Fixed devices instead supply explicit qubits, ports and
 mappings. Studio does not parse QIR operations or implement reset lowering.
 These settings describe a demonstration controller, not measured hardware.
 
-The service launches the exporter, `qsbitc`, and a fresh `qsbit-sim` process for
-each job. It passes arguments directly without shell interpolation. The generated
+The service launches the exporter, `qsbitc`, `qsbit-validate`, and a fresh `qsbit-sim` process for
+each job. It passes arguments directly without shell interpolation. The compiler’s shared validator checks the ELF digest, manifest schema, ABI layout,
+and run-profile agreement before simulation. The generated
 run profile retains the compiler's target settings and overrides only the chosen
 backend, seed, output paths, and trace-stall filter.
+
+Job admission reserves capacity before initializing a temporary directory. Only
+fully prepared jobs enter the registry. Pipeline execution lives in `pipeline.rs`;
+`jobs.rs` owns admission, status, cancellation, and shutdown. Artifact reads open
+regular files without following symbolic links.
 
 ## Execution player ownership
 
@@ -41,7 +48,7 @@ The only trace reducer and renderer are qsbit-sim's `trace-model.js` and
 `trace-player.js`. Shared typography, colors, styles and theme handling also come
 from qsbit-sim's `web/` directory.
 At startup Studio invokes the selected simulator's `--installation-info` and
-validates schema 1 and player API 1. It serves the reported `web_root` bytes
+validates schema 1, player API 1, and backend API 4 when Python is enabled. It serves the reported `web_root` bytes
 through `/player/`. Studio's JavaScript handles uploads, task state, metrics, theme
 synchronization and workspace tabs.
 

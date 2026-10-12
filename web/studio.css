@@ -65,3 +65,6 @@ footer { height: 32px; display: flex; flex-wrap: wrap; justify-content: space-be
   .masthead { height: auto; min-height: 56px; flex-wrap: wrap; }.masthead nav { gap: .5rem; }
   footer { height: auto; }.metrics { gap: .5rem; }
 }
+
+.history-row { display: flex; gap: 6px; }
+.history-row > button:first-child { flex: 1; min-width: 0; }

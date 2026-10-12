@@ -232,8 +232,6 @@ default_target = (
 launch_directory = tempfile.TemporaryDirectory(prefix="studio-launch-")
 environment = dict(os.environ)
 for name in (
-    "QSBIT_PYTHON",
-    "VIRTUAL_ENV",
     "PYTHONPATH",
     "PYTHONHOME",
     "PYTHONUSERBASE",
@@ -245,8 +243,6 @@ if args.polluted_environment:
     poison.mkdir()
     (poison / "__init__.py").write_text("raise RuntimeError('wrong backend loaded')\n")
     environment.update(
-        QSBIT_PYTHON="/missing/python",
-        VIRTUAL_ENV="/missing/venv",
         PYTHONHOME="/missing/home",
         PYTHONPATH=launch_directory.name,
     )
@@ -302,11 +298,14 @@ try:
     # Failed inputs cannot silently become a gallery example's run.
     for invalid_source, distance, stage in [
         ("BLOG 1.0\nthis is not a graph", 3, "exporting"),
-        (source, 5, "compiling"),
+        (source, 5, "exporting"),
     ]:
         report = finished(submit(invalid_source, distance)["id"])
         assert report["stage"] == "failed" and report["failed_stage"] == stage, report
         assert not report["replay_ready"]
+        if distance == 5:
+            assert "requires 49 qubits; target supports 32" in report["error"], report
+            assert "compile.log" not in report["artifacts"]
         api(f"/api/jobs/{report['id']}", method="DELETE")
     alternate = finished(submit(source, target="slow-ideal")["id"])
     alternate_id = verify_run(alternate)

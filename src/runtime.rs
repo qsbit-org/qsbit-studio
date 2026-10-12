@@ -16,6 +16,7 @@ pub struct Installation {
     pub player_api: u32,
     pub web_root: PathBuf,
     pub python_enabled: bool,
+    pub backend_api: Option<u32>,
     pub python: Option<PathBuf>,
     pub backend: Option<PathBuf>,
 }
@@ -74,6 +75,10 @@ pub async fn discover(simulator: &Path) -> Result<Installation> {
     );
     if info.python_enabled {
         ensure!(
+            info.backend_api == Some(4),
+            "Unsupported simulator backend API"
+        );
+        ensure!(
             info.python
                 .as_ref()
                 .is_some_and(|p| p.is_absolute() && p.is_file())
@@ -85,26 +90,6 @@ pub async fn discover(simulator: &Path) -> Result<Installation> {
         );
     }
     Ok(info)
-}
-
-pub fn default_target() -> Result<PathBuf> {
-    let executable = std::env::current_exe()?;
-    let mut directory = executable
-        .parent()
-        .context("Studio executable has no parent")?;
-    if directory.file_name().is_some_and(|name| name == "deps") {
-        directory = directory
-            .parent()
-            .context("Test executable has no build directory")?;
-    }
-    let development = directory.join("presets/studio-ideal-v1.json");
-    if development.is_file() {
-        return Ok(development);
-    }
-    Ok(directory
-        .parent()
-        .context("Studio executable has no installation prefix")?
-        .join("share/qsbit-studio/presets/studio-ideal-v1.json"))
 }
 
 pub fn default_work_dir() -> Result<PathBuf> {

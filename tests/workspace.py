@@ -60,11 +60,20 @@ def check(base):
         records = []
         pending_delete = []
         disconnected = False
+        cancelled = []
 
         def handle(route):
             path = route.request.url.removeprefix(base)
             if path == "/api/jobs":
-                route.fulfill(json={"jobs": records})
+                if route.request.method == "POST":
+                    created = report(f"job-{len(records)}", "queued")
+                    records.append(created)
+                    route.fulfill(status=202, json=created)
+                else:
+                    route.fulfill(json={"jobs": records})
+            elif path.endswith("/cancel"):
+                cancelled.append(path.split("/")[3])
+                route.fulfill(status=202, json={"cancellation_requested": True})
             elif route.request.method == "DELETE":
                 pending_delete.append(route)
             elif path.endswith("/replay"):
@@ -171,6 +180,15 @@ def check(base):
         page.reload()
         expect(page.locator("#status-badge")).to_have_text("Running")
         page.screenshot(path=str(OUTPUT / "running.png"), full_page=True)
+        upload("parallel.blog")
+        expect(page.locator("#run")).to_be_enabled()
+        page.click("#run")
+        expect(page.locator("#run-name")).to_have_text("job-1.blog")
+        expect(page.locator("#run")).to_be_enabled()
+        page.get_by_role("button", name="Cancel a.blog", exact=True).click()
+        assert cancelled == ["a"]
+        page.get_by_role("button", name="a.blog · Running", exact=True).click()
+        records[1] = report("job-1", "cancelled")
         disconnected = True
         expect(page.locator("#connection-status")).to_contain_text(
             "Status unavailable", timeout=10000
@@ -269,6 +287,8 @@ process = subprocess.Popen(
         str(ROOT / "target/debug/qsbit-studio"),
         "--listen",
         "127.0.0.1:0",
+        "--validator",
+        "/bin/true",
         "--compiler",
         "/bin/true",
         "--simulator",

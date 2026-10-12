@@ -10,7 +10,7 @@ let upload = null, selectedJob = null, submissionPending = false, uploadGenerati
 const connections = new Map();
 
 function showError(message) { $('upload-error').textContent = message; $('upload-error').hidden = !message; }
-function updateRunButton() { $('run').disabled = !upload || Boolean(activeJobs.size) || submissionPending; }
+function updateRunButton() { $('run').disabled = !upload || submissionPending; }
 function setUpload(filename, source, bytes) {
   upload = {filename, source};
   $('filename').textContent = filename;
@@ -58,7 +58,7 @@ function renderMetrics(report) {
     ['Simulated time', formatTime(m.simulated_duration_ns), `Stop tick: ${m.stop_tick_ns.toLocaleString()} ns`],
     ['Retired instructions', m.retired_instructions.toLocaleString(), `Last CPU edge index: ${m.last_cpu_cycle ?? '—'}`],
     ['Physical operations', m.physical_operations.toLocaleString(), `${m.timing_points} triggered time points`],
-    ['Measurement samples', m.measurement_samples.toLocaleString(), 'Includes reset measurements'],
+    ['Measurement samples', m.measurement_samples.toLocaleString(), 'Recorded measurement samples'],
     ['Physical qubits', m.physical_qubits, `Timing queue peak: ${m.timing_queue_peak}`],
     ['Host duration', `${(report.host_duration_ms / 1000).toFixed(2)} s`, 'Includes queue, compile, run, and analysis'],
   ]) { const card = node('div', undefined, $('metrics'), 'metric'); node('span', label, card); node('strong', String(value), card); node('small', note, card); card.title = note; }
@@ -72,9 +72,19 @@ function renderMetrics(report) {
 function renderHistory() {
   $('history').hidden = !jobs.size; $('history-list').replaceChildren();
   for (const report of jobs.values()) {
-    const button = node('button', `${report.filename} · ${stageNames[report.stage]}`, $('history-list'));
+    const row = node('div', undefined, $('history-list'), 'history-row');
+    const button = node('button', `${report.filename} · ${stageNames[report.stage]}`, row);
     button.type = 'button'; button.setAttribute('aria-pressed', String(report.id === selectedJob));
     button.addEventListener('click', () => { selectJob(report.id); });
+    if (!terminal(report.stage)) {
+      const cancel = node('button', 'Cancel', row);
+      cancel.type = 'button'; cancel.setAttribute('aria-label', `Cancel ${report.filename}`);
+      cancel.addEventListener('click', async () => {
+        cancel.disabled = true;
+        try { await api(`/api/jobs/${report.id}/cancel`, {method:'POST'}); }
+        catch (error) { showError(error.message); cancel.disabled = false; }
+      });
+    }
   }
 }
 function selectJob(id) {
@@ -162,7 +172,7 @@ $('example').addEventListener('click', async () => {
   try { const response = await fetch('/examples/x-memory.blog'); if (!response.ok) throw new Error('Example could not be loaded.'); const source = await response.text(); if (generation !== uploadGeneration) return; setUpload('x-memory.blog', source, new TextEncoder().encode(source).length); } catch (error) { if (generation === uploadGeneration) showError(error.message); }
 });
 $('run-form').addEventListener('submit', async event => {
-  event.preventDefault(); if (!upload || activeJobs.size || submissionPending) return;
+  event.preventDefault(); if (!upload || submissionPending) return;
   const seed = Number($('seed').value);
   if (!Number.isInteger(seed) || seed < 0 || seed > 4294967295) { showError('Seed must be an integer from 0 to 4294967295.'); return; }
   submissionPending = true; updateRunButton(); showError('');

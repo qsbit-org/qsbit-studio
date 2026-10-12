@@ -26,8 +26,6 @@ with tempfile.TemporaryDirectory(prefix="studio-installed-") as directory:
     environment.update(
         PATH=str(prefix / "bin") + os.pathsep + environment.get("PATH", ""),
         XDG_CACHE_HOME=str(root / "cache"),
-        VIRTUAL_ENV="/missing/venv",
-        QSBIT_PYTHON="/missing/python",
         PYTHONHOME="/missing/python",
         PYTHONPATH=str(launch),
     )

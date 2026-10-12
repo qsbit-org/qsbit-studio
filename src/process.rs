@@ -74,6 +74,9 @@ pub async fn run_stage(
     command
         .args(args)
         .current_dir(directory)
+        .env_remove("PYTHONHOME")
+        .env_remove("PYTHONPATH")
+        .env_remove("PYTHONUSERBASE")
         .stdin(Stdio::null())
         .stdout(Stdio::from(log.try_clone()?))
         .stderr(Stdio::from(log))

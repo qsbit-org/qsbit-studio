@@ -2,18 +2,13 @@ use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Instant};
 
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use tokio::{
     fs,
     sync::{Mutex, RwLock, Semaphore, watch},
 };
 use uuid::Uuid;
 
-use crate::{
-    Config, MAX_BLOG_BYTES,
-    artifact::{Metrics, inspect_run},
-    process::run_stage,
-};
+use crate::{Config, MAX_BLOG_BYTES, artifact::Metrics};
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -125,6 +120,7 @@ pub struct Report {
 pub struct Job {
     pub report: Mutex<Report>,
     pub directory: PathBuf,
+    _capacity: tokio::sync::OwnedSemaphorePermit,
     pub cancel: watch::Sender<bool>,
 }
 
@@ -136,7 +132,8 @@ pub struct Studio {
     pub targets: BTreeMap<String, Vec<u8>>,
     pub directory: PathBuf,
     pub jobs: RwLock<BTreeMap<Uuid, Arc<Job>>>,
-    pub running: Arc<Semaphore>,
+    pub(crate) running: Arc<Semaphore>,
+    capacity: Arc<Semaphore>,
 }
 
 pub const ARTIFACTS: &[&str] = &[
@@ -164,11 +161,23 @@ pub const ARTIFACTS: &[&str] = &[
     "report.json",
     "export.log",
     "compile.log",
+    "validate.log",
     "simulate.log",
 ];
 
 impl Studio {
     pub async fn new(mut config: Config) -> Result<Arc<Self>> {
+        ensure!(
+            config.listen.ip().is_loopback() || config.allow_remote,
+            "Non-loopback listening requires --allow-remote. Studio has no authentication or process isolation."
+        );
+        if !config.listen.ip().is_loopback() {
+            eprintln!(
+                "Warning: unauthenticated remote access is enabled at {}",
+                config.listen
+            );
+        }
+        config.validator = crate::runtime::executable(&config.validator)?;
         config.simulator = crate::runtime::executable(&config.simulator)?;
         config.compiler = crate::runtime::executable(&config.compiler)?;
         config.exporter = Some(crate::runtime::executable(&config.exporter_path()?)?);
@@ -185,9 +194,6 @@ impl Studio {
                 "Missing player asset {filename}; reinstall qsbit-sim or correct --player-root."
             );
         }
-        if config.targets.is_empty() {
-            config.targets.push(crate::runtime::default_target()?);
-        }
         let (default_target, targets) = crate::target::load_targets(&config.targets)?;
         let work_dir = match &config.work_dir {
             Some(path) => std::path::absolute(path)?,
@@ -200,6 +206,7 @@ impl Studio {
         fs::create_dir(&directory).await?;
         Ok(Arc::new(Self {
             running: Arc::new(Semaphore::new(config.max_running as usize)),
+            capacity: Arc::new(Semaphore::new(config.max_jobs as usize)),
             config,
             installation,
             player_root,
@@ -219,14 +226,15 @@ impl Studio {
         );
         let target = request.target.as_ref().unwrap_or(&self.default_target);
         let target_bytes = self.targets.get(target).context("Unknown target")?;
-        let mut jobs = self.jobs.write().await;
-        ensure!(
-            jobs.len() < self.config.max_jobs as usize,
-            "Job capacity is full. Remove a finished run before submitting another."
-        );
+        let capacity =
+            self.capacity.clone().try_acquire_owned().context(
+                "Job capacity is full. Remove a finished run before submitting another.",
+            )?;
         let id = Uuid::new_v4();
-        let directory = self.directory.join(id.to_string());
-        fs::create_dir(&directory).await?;
+        let prepared = tempfile::Builder::new()
+            .prefix("pending-")
+            .tempdir_in(&self.directory)?;
+        let directory = prepared.path().to_owned();
         fs::write(directory.join("input.blog"), &request.source).await?;
         fs::write(directory.join("target.json"), target_bytes).await?;
         fs::write(directory.join("request.json"), serde_json::to_vec_pretty(&serde_json::json!({"filename":request.filename,"distance":request.distance,"seed":request.seed,"backend":request.backend,"target":target,"bloq_revision":crate::BLOQ_REVISION,"simulator_revision":self.installation.revision}))?).await?;
@@ -240,7 +248,8 @@ impl Studio {
         .await?;
         let (cancel, _) = watch::channel(false);
         let job = Arc::new(Job {
-            directory,
+            directory: self.directory.join(id.to_string()),
+            _capacity: capacity,
             cancel,
             report: Mutex::new(Report {
                 target: target.clone(),
@@ -264,7 +273,10 @@ impl Studio {
                 artifacts: Vec::new(),
             }),
         });
+        let mut jobs = self.jobs.write().await;
+        std::fs::rename(prepared.path(), &job.directory)?;
         jobs.insert(id, job.clone());
+        drop(jobs);
         let state = self.clone();
         let task = job.clone();
         tokio::spawn(async move {
@@ -279,7 +291,7 @@ impl Studio {
 
     async fn execute(&self, job: Arc<Job>, request: RunRequest) {
         let started = Instant::now();
-        let result = self.pipeline(&job, &request).await;
+        let result = crate::pipeline::run(&self.config, &self.running, &job, &request).await;
         let mut report = job.report.lock().await;
         report.host_duration_ms =
             Some(started.elapsed().as_millis().try_into().unwrap_or(u64::MAX));
@@ -296,136 +308,17 @@ impl Studio {
         }
         report.artifacts = ARTIFACTS
             .iter()
-            .filter(|name| job.directory.join(name).is_file())
+            .filter(|name| crate::files::is_file(&job.directory.join(name)))
             .map(|name| (*name).to_owned())
             .collect();
         if !report.artifacts.iter().any(|name| name == "report.json") {
             report.artifacts.push("report.json".to_owned());
         }
         if let Ok(bytes) = serde_json::to_vec_pretty(&*report)
-            && let Err(error) = fs::write(job.directory.join("report.json"), bytes).await
+            && let Err(error) = crate::files::write(&job.directory.join("report.json"), &bytes)
         {
             eprintln!("Could not save run report: {error}");
         }
-    }
-
-    async fn pipeline(&self, job: &Arc<Job>, request: &RunRequest) -> Result<()> {
-        let mut cancelled = job.cancel.subscribe();
-        let _permit = tokio::select! {
-            permit = self.running.clone().acquire_owned() => permit?,
-            _ = cancelled.wait_for(|value| *value) => anyhow::bail!("Task cancelled while queued."),
-        };
-        ensure!(!*job.cancel.borrow(), "Task cancelled.");
-        let exporter = self.config.exporter_path()?;
-        self.stage(
-            job,
-            Stage::Exporting,
-            "export",
-            &exporter,
-            &[
-                "input.blog".into(),
-                "--output".into(),
-                job.directory.clone().into_os_string(),
-                "--distance".into(),
-                request.distance.to_string().into(),
-            ],
-        )
-        .await?;
-        self.stage(
-            job,
-            Stage::Compiling,
-            "compile",
-            &self.config.compiler,
-            &[
-                "program.bc".into(),
-                "--target".into(),
-                "target.json".into(),
-                "-o".into(),
-                "program.elf".into(),
-            ],
-        )
-        .await?;
-        let mut run: Value =
-            serde_json::from_slice(&fs::read(job.directory.join("program.run.json")).await?)?;
-        run["backend"] = request.backend.name().into();
-        run["profile"]["seed"] = request.seed.into();
-        run["trace"] = "trace.jsonl".into();
-        run["summary"] = "summary.json".into();
-        run["memory_dump"] = "memory.bin".into();
-        run["trace_stalls"] = false.into();
-        fs::write(
-            job.directory.join("run.json"),
-            serde_json::to_vec_pretty(&run)?,
-        )
-        .await?;
-        let simulation = self
-            .stage(
-                job,
-                Stage::Simulating,
-                "simulate",
-                &self.config.simulator,
-                &["--config".into(), "run.json".into()],
-            )
-            .await;
-        ensure!(!*job.cancel.borrow(), "Task cancelled.");
-        // A model fault can still yield a valid partial replay and failed summary.
-        if job.directory.join("trace.jsonl").is_file()
-            && job.directory.join("summary.json").is_file()
-        {
-            job.report.lock().await.stage = Stage::Analysing;
-            let directory = job.directory.clone();
-            let filename = request.filename.clone();
-            let metrics =
-                tokio::task::spawn_blocking(move || inspect_run(&directory, &filename)).await??;
-            let accepted = metrics.simulator_success && metrics.program_exit_code == Some(0);
-            {
-                let mut report = job.report.lock().await;
-                report.replay_ready = true;
-                report.metrics = Some(metrics);
-            }
-            if let Err(error) = simulation {
-                job.report.lock().await.stage = Stage::Simulating;
-                return Err(error);
-            }
-            if !accepted {
-                job.report.lock().await.stage = Stage::Simulating;
-                anyhow::bail!(
-                    "The simulator drained, but the program returned a nonzero exit status."
-                );
-            }
-        } else {
-            simulation?;
-            anyhow::bail!("Simulator did not produce trace and summary artifacts.");
-        }
-        ensure!(!*job.cancel.borrow(), "Task cancelled.");
-        Ok(())
-    }
-
-    async fn stage(
-        &self,
-        job: &Job,
-        stage: Stage,
-        name: &str,
-        executable: &std::path::Path,
-        args: &[std::ffi::OsString],
-    ) -> Result<()> {
-        ensure!(!*job.cancel.borrow(), "Task cancelled.");
-        job.report.lock().await.stage = stage;
-        let start = Instant::now();
-        let result = run_stage(
-            &self.config,
-            &job.directory,
-            executable,
-            args,
-            name,
-            job.cancel.subscribe(),
-        )
-        .await;
-        job.report.lock().await.stage_host_ms.insert(
-            name.to_owned(),
-            start.elapsed().as_millis().try_into().unwrap_or(u64::MAX),
-        );
-        result
     }
 
     pub async fn shutdown(&self) {

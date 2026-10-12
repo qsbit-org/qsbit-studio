@@ -4,8 +4,9 @@ Run commands from the Studio repository root. The Rust toolchain is pinned in
 [rust-toolchain.toml](../rust-toolchain.toml), Rust dependencies and Bloq's Git
 revision in [Cargo.toml](../Cargo.toml) and [Cargo.lock](../Cargo.lock).
 
-The server and BLOG adapter are Rust programs. Python is optional for numerical
-backends and browser tests; a default Cargo build does not install Python packages.
+The server and BLOG adapter are Rust programs. The compiler’s Python tools
+provide artifact validation. Numerical backends and browser tests have separate
+Python dependencies; Cargo does not install them.
 
 ## Native tools
 
@@ -14,9 +15,10 @@ and `qsbit-sim` following the [simulator build instructions](https://github.com/
 The simulator must support the selected backend. The BLOG adapter also uses the
 LLVM optimizer and assembler required by Bloq's pinned QIR exporter.
 
-Install both Studio executables and the default target preset:
+Install the compiler’s artifact validator, then both Studio executables:
 
 ```sh
+uv tool install "git+https://github.com/qsbit-org/qsbit-compiler"
 make install PREFIX="$HOME/.local"
 export PATH="$HOME/.local/bin:$PATH"
 source /path/to/your/venv/bin/activate
@@ -29,31 +31,32 @@ Studio. The Studio source checkout is not needed at runtime.
 `qsbit-blog-export` is installed beside Studio; `qsbitc` is installed by the
 compiler's CMake install into its prefix's `bin` directory. Both are native
 executables. The BLOG exporter also requires LLVM tools on PATH; the compiler
-itself does not require Python. Optional compiler Python helpers are separate.
+itself does not require Python. Studio requires `qsbit-validate`, which shares
+its validator with `qsbit-run`.
 
-For development, `cargo build --locked --features exporter` copies the default
-preset beside the build output. Select local native builds explicitly:
+For development, build both binaries with `cargo build --locked --features exporter`.
+Select tools through PATH or environment variables:
 
 ```sh
-cargo run --locked -- \
-  --compiler ../qsbit-compiler/build-clang/qsbitc \
-  --simulator ../qsbit-sim/build-clang/qsbit-sim
+export QSBIT_COMPILER=/path/to/qsbitc
+export QSBIT_SIMULATOR=/path/to/qsbit-sim
+cargo run --locked
 ```
 
 Relative executable paths are resolved from the launch directory. Commands run
 in isolated job directories; uploaded filenames are never used as paths or shell
-commands. The default exporter is `qsbit-blog-export` beside the server binary.
+commands. Child processes discard `PYTHONHOME`, `PYTHONPATH`, and `PYTHONUSERBASE`;
+`QSBIT_PYTHON` and `VIRTUAL_ENV` retain their interpreter-selection semantics.
+The default exporter is `qsbit-blog-export` beside the server binary.
 
 ## Target selection
 
-The installed default target is `PREFIX/share/qsbit-studio/presets/studio-ideal-v1.json`,
-resolved from the Studio executable and read at startup. A development build uses
-`target/debug/presets/studio-ideal-v1.json` (or the selected build profile). Edit
-its timing and resource settings and restart Studio; no Rust rebuild is needed. Load additional ideal or fixed-device targets:
+Studio embeds `presets/studio-ideal-v1.json` as its default target. Installation also
+copies it to `PREFIX/share/qsbit-studio/presets/` for customization. Pass edited
+presets with `--target` and restart Studio; no rebuild is needed:
 
 ```sh
 cargo run --locked -- \
-  --compiler ../qsbit-compiler/build-clang/qsbitc \
   --target presets/studio-ideal-v1.json \
   --target /path/to/device.json
 ```
@@ -96,10 +99,11 @@ The simulator selects explicit `QSBIT_PYTHON` when supplied, then the active
 `VIRTUAL_ENV/bin/python`; installed commands otherwise find a matching versioned
 Python on PATH. Python's major/minor version must match the simulator bridge.
 Studio inherits these settings and obtains the actual interpreter, backend package
-location and player path from `--installation-info` at startup. A missing interpreter,
+location, verified backend API version, and player path from `--installation-info`
+at startup. A missing interpreter,
 backend package, resource or unsupported interface version fails startup. Users
-are responsible for installing the selected numerical backend's dependencies and
-keeping the Python package compatible with the native executable.
+are responsible for installing the selected numerical backend's dependencies
+and updating the package with the native executable.
 
 Keep the linked Python library and native dependencies available. To upgrade,
 stop Studio and simulations, update native code with the simulator's normal CMake
@@ -114,9 +118,11 @@ The server currently targets Linux and uses Unix process groups for teardown.
 
 | Option | Default and behavior |
 | --- | --- |
-| `--listen` | `127.0.0.1:3000`; use port 0 for an OS-assigned port. |
+| `--listen` | `127.0.0.1:3000`; non-loopback addresses require `--allow-remote`. |
+| `--allow-remote` | Acknowledge unauthenticated network access without process isolation. |
+| `--validator` | `qsbit-validate`; `QSBIT_VALIDATOR` overrides it. |
 | `--compiler`, `--simulator` | Installed `qsbitc` and `qsbit-sim`; environment overrides are `QSBIT_COMPILER` and `QSBIT_SIMULATOR`. |
-| `--target` | Repeatable target JSON path; defaults to the preset beside the build or under the installation’s `share` directory. First target is the default selection. |
+| `--target` | Repeatable target JSON path; defaults to the embedded preset. First target is the default selection. |
 | `--exporter` | Exporter beside the Studio binary; `QSBIT_BLOG_EXPORTER` overrides it. |
 | `--player-root` | Discovered from the simulator; explicit override for development, labeled as custom resources. |
 | `--work-dir` | `$XDG_CACHE_HOME/qsbit-studio/runs` or `$HOME/.cache/qsbit-studio/runs`; creates an owned session directory. |

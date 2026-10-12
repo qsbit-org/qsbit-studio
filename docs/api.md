@@ -21,7 +21,7 @@ also use Axum's HTTP 400 extractor response.
 
 `filename` is a basename ending in `.blog`, with at most 128 bytes. `source` is
 1–262144 UTF-8 bytes with a BLOG header. Unknown keys are rejected. Distance is
-3, 5, or 7; backend is `stim` or `mock`; seed is an unsigned 32-bit integer.
+3, 5, or 7, subject to the selected target’s qubit capacity; backend is `stim` or `mock`; seed is an unsigned 32-bit integer.
 The defaults are distance 3, Stim, seed 1, and the first configured target.
 `target` selects a server-configured filename stem, never a client filesystem path.
 Unknown selections return HTTP 400. Reports and `request.json` record the resolved
@@ -33,7 +33,8 @@ without Python support returns HTTP 400 with `backend_unavailable`.
 HTTP 202 returns a job report with an opaque UUID. Invalid input returns 400/422,
 oversized HTTP bodies return 413, and retained-job capacity returns 503 with
 `error.code: capacity_full`. A graph accepted for processing can still fail
-parsing, compilation, backend validation, or execution.
+parsing, resource checks, compilation, artifact validation, or execution.
+The exporter checks the compiled graph’s actual qubit count before emitting QIR.
 
 ## Inspect and manage runs
 
@@ -46,7 +47,7 @@ parsing, compilation, backend validation, or execution.
 | `DELETE /api/jobs/{id}` | Remove a terminal run and release capacity; active jobs return 409. |
 | `GET /api/jobs/{id}/replay` | Validated schema-1 replay bundle; unavailable replay returns 409. |
 | `GET /runs/{id}/player` | Standalone host for the shared qsbit-sim player. |
-| `GET /api/jobs/{id}/artifacts/{name}` | Download a listed artifact after the run becomes terminal. Unlisted names return 404. |
+| `GET /api/jobs/{id}/artifacts/{name}` | Download a listed artifact after the run becomes terminal. Unknown names, symbolic links, and nonregular files return 404. |
 
 Stages are `queued`, `exporting`, `compiling`, `simulating`, `analysing`, and one
 terminal value: `completed`, `failed`, or `cancelled`. Reports preserve
@@ -67,7 +68,7 @@ Metrics appear in the report and downloadable `metrics.json`.
 | `last_cpu_cycle` | Maximum recorded CPU edge index; not elapsed nanoseconds. |
 | `physical_operations` | Count of `OperationStart` records; includes acquisitions and reset work. |
 | `operations` | Operation-start counts grouped by recorded operation name. |
-| `measurement_samples` | Count of `MeasurementSampled` records, including reset measurements. |
+| `measurement_samples` | Count of `MeasurementSampled` records. |
 | `timing_points` | Count of `TimingPointTriggered` records. |
 | `timing_queue_peak` | Maximum post-enqueue occupancy in `TimingPointEnqueued.value`. |
 | `measurement_delivery` | Sample-to-register-update latency, matched by epoch, core, measurement ID, and target; sample count, mean, and maximum in ns. |
@@ -76,7 +77,7 @@ Metrics appear in the report and downloadable `metrics.json`.
 | `trace_records` | Number of validated observations. |
 
 Report `host_duration_ms` includes queue waiting and processing. `stage_host_ms`
-measures native exporter, compiler, and simulator calls with a monotonic host
+measures exporter, compiler, artifact validator, and simulator calls with a monotonic host
 clock. These values are execution measurements, not controlled benchmarks.
 
 Faulted/nonzero-status runs have no accepted output bits. A valid partial replay

@@ -14,9 +14,10 @@ run it, and inspect the results.
 
 On Linux, install Rust, LLVM 21 tools, [qsbit-compiler](https://github.com/qsbit-org/qsbit-compiler#build)
 and [qsbit-sim with Stim support](https://qsbit-org.github.io/qsbit-sim/building.html#install-with-a-python-backend).
-Put `qsbitc` and `qsbit-sim` on PATH, then run from the repository root:
+Put `qsbitc` and `qsbit-sim` on PATH. With uv installed, run from the repository root:
 
 ```sh
+uv tool install "git+https://github.com/qsbit-org/qsbit-compiler"
 make install PREFIX="$HOME/.local"
 export PATH="$HOME/.local/bin:$PATH"
 ```

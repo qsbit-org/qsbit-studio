@@ -1,6 +1,8 @@
 pub mod api;
 pub mod artifact;
+mod files;
 pub mod jobs;
+mod pipeline;
 pub mod process;
 pub mod runtime;
 pub mod target;
@@ -34,6 +36,11 @@ pub const MAX_JOB_BYTES: u64 = 64 * 1024 * 1024;
 pub struct Config {
     #[arg(long, default_value = "127.0.0.1:3000")]
     pub listen: SocketAddr,
+    /// Allow unauthenticated access from non-loopback addresses.
+    #[arg(long)]
+    pub allow_remote: bool,
+    #[arg(long, env = "QSBIT_VALIDATOR", default_value = "qsbit-validate")]
+    pub validator: PathBuf,
     #[arg(long, env = "QSBIT_COMPILER", default_value = "qsbitc")]
     pub compiler: PathBuf,
     /// Target JSON files offered to clients; the first is the default.

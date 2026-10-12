@@ -1,6 +1,11 @@
 name: Native and browser integration
 on:
   workflow_dispatch:
+  pull_request:
+    paths: ["src/**", "web/**", "tests/**", "presets/**", "Cargo.*", "rust-toolchain.toml", "toolchain.lock.json", "pyproject.toml", "uv.lock", "Makefile", ".github/workflows/**"]
+  push:
+    branches: [main]
+    paths: ["src/**", "web/**", "tests/**", "presets/**", "Cargo.*", "rust-toolchain.toml", "toolchain.lock.json", "pyproject.toml", "uv.lock", "Makefile", ".github/workflows/**"]
 permissions:
   contents: read
 jobs:
@@ -8,6 +13,8 @@ jobs:
     runs-on: ubuntu-24.04
     container: ubuntu:26.04
     timeout-minutes: 45
+    env:
+      QSBIT_PYTHON: /tmp/qsbit-toolchain/lib/qsbit-sim/venv/bin/python
     steps:
       - name: Install native tools
         run: |
@@ -54,6 +61,8 @@ jobs:
             -DCMAKE_PREFIX_PATH=/tmp/qsbit-toolchain
           cmake --build /tmp/qsbit-compiler/build --parallel 2
           cmake --install /tmp/qsbit-compiler/build --prefix /tmp/qsbit-toolchain
+          uv pip install --python .venv/bin/python /tmp/qsbit-compiler
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - name: Build Studio
         run: make install PREFIX=/tmp/qsbit-toolchain
       - name: Install browser and exercise real uploads

@@ -202,6 +202,7 @@ async fn core_only_simulator_rejects_stim_before_creating_a_job() {
 }
 
 fn configure_runtime(config: &mut Config, directory: &std::path::Path) {
+    config.validator = "/bin/true".into();
     let web = directory.join("web");
     for (asset, _) in qsbit_studio::PLAYER_ASSETS {
         let path = web.join(asset);
@@ -433,4 +434,117 @@ fn target_catalog_rejects_duplicate_ids_and_invalid_json() {
         std::fs::write(&path, invalid).unwrap();
         assert!(qsbit_studio::target::load_targets(std::slice::from_ref(&path)).is_err());
     }
+}
+
+#[tokio::test]
+async fn artifact_downloads_reject_symlinks_and_nonregular_files() {
+    use std::os::unix::fs::symlink;
+    let (directory, state, app) = setup(1).await;
+    let (_, submitted) = request(&app, "POST", "/api/jobs", upload()).await;
+    let id = submitted["id"].as_str().unwrap();
+    terminal_report(&app, id).await;
+    let job = state.get(id.parse().unwrap()).await.unwrap();
+    let secret = directory.path().join("secret");
+    std::fs::write(&secret, "private data").unwrap();
+    symlink(&secret, job.directory.join("memory.bin")).unwrap();
+    std::fs::create_dir(job.directory.join("metrics.json")).unwrap();
+    for name in ["memory.bin", "metrics.json"] {
+        assert_eq!(
+            request(
+                &app,
+                "GET",
+                &format!("/api/jobs/{id}/artifacts/{name}"),
+                Value::Null
+            )
+            .await
+            .0,
+            StatusCode::NOT_FOUND
+        );
+    }
+    symlink(&secret, job.directory.join("replay.json")).unwrap();
+    job.report.lock().await.replay_ready = true;
+    assert_eq!(
+        request(&app, "GET", &format!("/api/jobs/{id}/replay"), Value::Null)
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    state.shutdown().await;
+}
+
+#[tokio::test]
+async fn failed_bundle_validation_prevents_simulation() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut config = Config::parse_from(["test"]);
+    configure_runtime(&mut config, directory.path());
+    config.work_dir = Some(directory.path().join("runs"));
+    config.exporter = Some("/bin/true".into());
+    config.validator = mock_tool(
+        directory.path(),
+        "validate",
+        "echo invalid-bundle >&2; exit 1",
+    );
+    config.simulator = mock_tool(directory.path(), "simulate", "touch simulation-started");
+    let state = Studio::new(config).await.unwrap();
+    let app = router(state.clone());
+    let (_, submitted) = request(&app, "POST", "/api/jobs", upload()).await;
+    let id = submitted["id"].as_str().unwrap();
+    let report = terminal_report(&app, id).await;
+    assert_eq!(report["stage"], "failed");
+    assert!(report["error"].as_str().unwrap().contains("invalid-bundle"));
+    let job = state.get(id.parse().unwrap()).await.unwrap();
+    assert!(!job.directory.join("simulation-started").exists());
+    state.shutdown().await;
+}
+
+#[tokio::test]
+async fn concurrent_admission_reserves_capacity_without_orphan_directories() {
+    let (_directory, state, app) = setup(1).await;
+    let (a, b) = tokio::join!(
+        request(&app, "POST", "/api/jobs", upload()),
+        request(&app, "POST", "/api/jobs", upload())
+    );
+    let statuses = [a.0, b.0];
+    assert!(statuses.contains(&StatusCode::ACCEPTED));
+    assert!(statuses.contains(&StatusCode::SERVICE_UNAVAILABLE));
+    assert_eq!(std::fs::read_dir(&state.directory).unwrap().count(), 1);
+    state.shutdown().await;
+}
+
+#[tokio::test]
+async fn remote_listening_requires_explicit_consent() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut config = Config::parse_from(["test", "--listen", "0.0.0.0:3000"]);
+    configure_runtime(&mut config, directory.path());
+    config.work_dir = Some(directory.path().join("runs"));
+    assert!(
+        Studio::new(config.clone())
+            .await
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("--allow-remote")
+    );
+    config.allow_remote = true;
+    Studio::new(config).await.unwrap().shutdown().await;
+}
+
+#[tokio::test]
+async fn backend_api_mismatch_rejects_startup() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut config = Config::parse_from(["test"]);
+    configure_runtime(&mut config, directory.path());
+    let path = directory.path().join("installation.json");
+    let mut info: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    info["python_enabled"] = true.into();
+    info["backend_api"] = 999.into();
+    std::fs::write(path, info.to_string()).unwrap();
+    assert!(
+        Studio::new(config)
+            .await
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("backend API")
+    );
 }

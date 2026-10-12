@@ -15,6 +15,8 @@ struct Args {
     output: PathBuf,
     #[arg(long, default_value = "3")]
     distance: u32,
+    #[arg(long)]
+    target: PathBuf,
 }
 
 fn main() -> Result<()> {
@@ -33,6 +35,19 @@ fn main() -> Result<()> {
     let ir = bloq::compile::compile(&graph, args.distance).context("compile block graph")?;
     let program = bloq::vm::lower(&ir, &bloq::vm::LoweringConfig::default())
         .context("lower physical program")?;
+    let target: serde_json::Value = serde_json::from_slice(&fs::read(&args.target)?)?;
+    let limit = target
+        .pointer("/ideal/max_qubits")
+        .or_else(|| target.get("qubits"))
+        .and_then(serde_json::Value::as_u64)
+        .context("Target must declare ideal.max_qubits or qubits")?;
+    ensure!(
+        program.qubit_count as u64 <= limit,
+        "Graph at distance {} requires {} qubits; target supports {}. Select a smaller distance or a larger target.",
+        args.distance,
+        program.qubit_count,
+        limit
+    );
     ensure!(
         !program
             .tasks
@@ -56,6 +71,12 @@ fn main() -> Result<()> {
     };
     let artifact =
         bloq::qir::emit_program_qir(&program, &options).context("export Adaptive QIR")?;
+    ensure!(
+        artifact.qubit_count as u64 <= limit,
+        "QIR requires {} qubits including scratch resources; target supports {}.",
+        artifact.qubit_count,
+        limit
+    );
     fs::create_dir_all(&args.output)?;
     fs::write(args.output.join("program.ll"), &artifact.llvm_ir)?;
     fs::write(args.output.join("program.bc"), &artifact.bitcode)?;

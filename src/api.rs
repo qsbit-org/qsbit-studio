@@ -189,8 +189,12 @@ async fn remove(State(state): AppState, Path(id): Path<Uuid>) -> Response {
 }
 
 async fn serve_file(path: PathBuf, mime: &'static str, download: Option<&str>) -> Response {
-    match tokio::fs::read(path).await {
-        Ok(bytes) => {
+    let bytes = tokio::task::spawn_blocking(move || crate::files::read(&path))
+        .await
+        .ok()
+        .and_then(Result::ok);
+    match bytes {
+        Some(bytes) => {
             let mut response = (
                 [
                     (header::CONTENT_TYPE, mime),
@@ -208,7 +212,7 @@ async fn serve_file(path: PathBuf, mime: &'static str, download: Option<&str>) -
             }
             response
         }
-        Err(_) => error(
+        None => error(
             StatusCode::NOT_FOUND,
             "missing_artifact",
             "Artifact is unavailable.",

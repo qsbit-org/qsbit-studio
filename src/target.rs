@@ -4,6 +4,14 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 pub fn load_targets(paths: &[PathBuf]) -> Result<(String, BTreeMap<String, Vec<u8>>)> {
     let mut targets = BTreeMap::new();
+    if paths.is_empty() {
+        let id = "studio-ideal-v1".to_owned();
+        targets.insert(
+            id.clone(),
+            include_bytes!("../presets/studio-ideal-v1.json").to_vec(),
+        );
+        return Ok((id, targets));
+    }
     let mut default = None;
     for path in paths {
         let id = path

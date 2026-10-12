@@ -2,7 +2,6 @@
 
 use std::{
     collections::{BTreeMap, HashMap},
-    fs,
     path::Path,
 };
 
@@ -285,23 +284,31 @@ pub fn read_outputs(memory: &[u8], manifest: &Value, export: &Value) -> Result<V
 
 pub fn inspect_run(directory: &Path, filename: &str) -> Result<Metrics> {
     let trace_path = directory.join("trace.jsonl");
+    let trace = crate::files::read(&trace_path)?;
     ensure!(
-        fs::metadata(&trace_path)?.len() <= MAX_TRACE_BYTES,
+        trace.len() as u64 <= MAX_TRACE_BYTES,
         "Trace exceeds the replay size limit."
     );
-    let events = validate_trace(&fs::read_to_string(trace_path)?)?;
-    let summary: Value = serde_json::from_slice(&fs::read(directory.join("summary.json"))?)?;
-    let export: Value = serde_json::from_slice(&fs::read(directory.join("export.json"))?)?;
+    let events = validate_trace(&String::from_utf8(trace)?)?;
+    let summary: Value =
+        serde_json::from_slice(&crate::files::read(&directory.join("summary.json"))?)?;
+    let export: Value =
+        serde_json::from_slice(&crate::files::read(&directory.join("export.json"))?)?;
     let outputs = if summary["success"] == true && summary["exit_code"] == 0 {
-        let manifest: Value =
-            serde_json::from_slice(&fs::read(directory.join("program.manifest.json"))?)?;
-        read_outputs(&fs::read(directory.join("memory.bin"))?, &manifest, &export)?
+        let manifest: Value = serde_json::from_slice(&crate::files::read(
+            &directory.join("program.manifest.json"),
+        )?)?;
+        read_outputs(
+            &crate::files::read(&directory.join("memory.bin"))?,
+            &manifest,
+            &export,
+        )?
     } else {
         Vec::new()
     };
     let metrics = metrics_for(&events, &summary, &export, outputs)?;
     let installation: Value =
-        serde_json::from_slice(&fs::read(directory.join("installation.json"))?)?;
+        serde_json::from_slice(&crate::files::read(&directory.join("installation.json"))?)?;
     let revision = if installation["player_override"] == true {
         Value::Null
     } else {
@@ -311,10 +318,13 @@ pub fn inspect_run(directory: &Path, filename: &str) -> Result<Metrics> {
         "name": filename, "program": "", "configuration": summary.get("configuration"),
         "cores": summary.get("cores"), "backend": summary["backend"], "events": events
     }]});
-    fs::write(directory.join("replay.json"), serde_json::to_vec(&bundle)?)?;
-    fs::write(
-        directory.join("metrics.json"),
-        serde_json::to_vec_pretty(&metrics)?,
+    crate::files::write(
+        &directory.join("replay.json"),
+        &serde_json::to_vec(&bundle)?,
+    )?;
+    crate::files::write(
+        &directory.join("metrics.json"),
+        &serde_json::to_vec_pretty(&metrics)?,
     )?;
     Ok(metrics)
 }
