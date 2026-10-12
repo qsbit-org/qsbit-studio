@@ -20,9 +20,6 @@ docker run --rm --init --name qsbit-studio \
 Open <http://127.0.0.1:3000>, upload or paste a [BLOG graph](https://bloqec.com/editor/),
 and click **Compile & run**. Inspect **Results**, **Replay**, and **Logs**.
 
-The image includes the compiler, simulator, and Stim. No other installation is required.
-Download artifacts before stopping the container; session history is not restored.
-
 `edge` follows tested main builds. Formal releases publish a version tag and `latest`.
 For reproducible runs, use an image digest. The image supports Linux AMD64.
 
