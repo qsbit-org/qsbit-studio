@@ -21,13 +21,18 @@ Install the compiler’s artifact validator, then both Studio executables:
 uv tool install "git+https://github.com/qsbit-org/qsbit-compiler"
 make install PREFIX="$HOME/.local"
 export PATH="$HOME/.local/bin:$PATH"
-source /path/to/your/venv/bin/activate
-qsbit-studio
 ```
 
 After adding the installation's `bin` directory to PATH, launch Studio from any
 working directory. Activate the simulator’s Python environment before launching
-Studio. The Studio source checkout is not needed at runtime.
+Studio.
+
+```sh
+source /path/to/your/venv/bin/activate
+qsbit-studio
+```
+
+The Studio source checkout is not needed at runtime.
 `qsbit-blog-export` is installed beside Studio; `qsbitc` is installed by the
 compiler's CMake install into its prefix's `bin` directory. Both are native
 executables. The BLOG exporter also requires LLVM tools on PATH; the compiler
